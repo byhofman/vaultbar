@@ -1,0 +1,8 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/Vaultbar/Vaultbar.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/Vaultbar.Tests/Vaultbar.Tests.csproj" />
+  </Folder>
+</Solution>
