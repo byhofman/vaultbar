@@ -16,6 +16,8 @@ public sealed class Config
     public bool CopyTotpAfterFill { get; set; } = true;
     public bool HideAfterCopy { get; set; } = true;
     public bool ShowFavicons { get; set; } = true;
+    public bool HideFromScreenCapture { get; set; } = true;
+    public bool WindowsHello { get; set; } = true;
     public string? DataPath { get; set; }
 
     [JsonIgnore]

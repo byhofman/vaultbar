@@ -74,6 +74,13 @@ internal sealed class MacPlatform : IPlatform
     {
     }
 
+    public void ExcludeFromCapture(Window window)
+    {
+        if (window.TryGetPlatformHandle() is not { Handle: not 0 } handle) return;
+        var nsWindow = handle.HandleDescriptor == "NSWindow" ? handle.Handle : ObjC.Send(handle.Handle, ObjC.Sel("window"));
+        if (nsWindow != 0) ObjC.Send(nsWindow, ObjC.Sel("setSharingType:"), 0);
+    }
+
     public void AfterShow()
     {
         var nsApp = ObjC.Send(ObjC.Class("NSApplication"), ObjC.Sel("sharedApplication"));

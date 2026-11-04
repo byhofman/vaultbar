@@ -61,6 +61,7 @@ internal static class Program
         catch (Exception ex)
         {
             Log.Write($"fatal: {ex}");
+            AppController.Current?.ClearClipboardOnCrash();
             AttachConsole();
             Console.Error.WriteLine(ex.Message);
             return 1;

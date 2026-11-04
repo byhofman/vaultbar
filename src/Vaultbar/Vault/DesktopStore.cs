@@ -20,6 +20,7 @@ public sealed class StoreSnapshot
     public DateTimeOffset? LastSync { get; init; }
     public bool ShowFavicons { get; init; } = true;
     public string IconsBaseUrl { get; init; } = "https://icons.bitwarden.net";
+    public string WebVaultUrl { get; init; } = "https://vault.bitwarden.com";
     public string? VaultTimeout { get; init; }
     public string ContentHash { get; init; } = "";
 }
@@ -127,6 +128,7 @@ public static class DesktopStore
 
         var ciphers = U("ciphers_ciphers") as JsonObject ?? new JsonObject();
         var folders = U("folder_folders") as JsonObject ?? new JsonObject();
+        var env = U("environment_environment") ?? root["global_environment_environment"];
 
         return new StoreSnapshot
         {
@@ -142,7 +144,8 @@ public static class DesktopStore
             Folders = folders,
             LastSync = DateTimeOffset.TryParse(Str(U("sync_lastSync")), out var ls) ? ls : null,
             ShowFavicons = root["global_domainSettings_showFavicons"] is not JsonValue sf || !sf.TryGetValue<bool>(out var show) || show,
-            IconsBaseUrl = IconsUrl(U("environment_environment") ?? root["global_environment_environment"]),
+            IconsBaseUrl = IconsUrl(env),
+            WebVaultUrl = WebVaultUrl(env),
             VaultTimeout = U("vaultTimeoutSettings_vaultTimeout") switch
             {
                 JsonValue v when v.TryGetValue<string>(out var s) => s,
@@ -157,8 +160,24 @@ public static class DesktopStore
     private static KdfConfig ParseKdf(JsonNode? n)
     {
         if (n is null) throw new StoreException("KDF settings missing from Bitwarden data.");
-        var type = (KdfType)(Int(n["kdfType"]) ?? 0);
-        return new KdfConfig(type, Int(n["iterations"]) ?? 600000, Int(n["memory"]), Int(n["parallelism"]));
+        var kdf = new KdfConfig((KdfType)(Int(n["kdfType"]) ?? 0), Int(n["iterations"]) ?? 600000, Int(n["memory"]), Int(n["parallelism"]));
+        var valid = kdf.Type switch
+        {
+            KdfType.Pbkdf2 => kdf.Iterations is >= 5_000 and <= 2_000_000,
+            KdfType.Argon2id => kdf.Iterations is >= 2 and <= 10 && kdf.MemoryMiB is null or (>= 16 and <= 1024)
+                                && kdf.Parallelism is null or (>= 1 and <= 16),
+            _ => throw new StoreException($"Unsupported KDF type {(int)kdf.Type}."),
+        };
+        if (!valid) throw new StoreException("The KDF settings in the Bitwarden data are outside the range Bitwarden allows.");
+        return kdf;
+    }
+
+    private static string WebVaultUrl(JsonNode? env)
+    {
+        var urls = env?["urls"];
+        if (Str(urls?["webVault"]) is { Length: > 0 } web) return web.TrimEnd('/');
+        if (Str(urls?["base"]) is { Length: > 0 } baseUrl) return baseUrl.TrimEnd('/');
+        return Str(env?["region"]) == "EU" ? "https://vault.bitwarden.eu" : "https://vault.bitwarden.com";
     }
 
     private static string IconsUrl(JsonNode? env)

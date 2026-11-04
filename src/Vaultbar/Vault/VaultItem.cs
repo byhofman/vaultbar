@@ -103,9 +103,31 @@ public sealed class VaultItem
 
     public string? PrimaryHost => Hosts.FirstOrDefault();
 
-    public string? LaunchUrl => Uris
-        .Select(u => u.Contains("://") ? u : "https://" + u)
-        .FirstOrDefault(u => u.StartsWith("http://", StringComparison.OrdinalIgnoreCase) || u.StartsWith("https://", StringComparison.OrdinalIgnoreCase));
+    public string? IconHost => Hosts.FirstOrDefault(IsPublicHost);
+
+    public string? LaunchUrl => Uris.Select(WebUrl).FirstOrDefault(u => u != null);
+
+    private static readonly string[] PrivateSuffixes = ["localhost", "local", "lan", "internal", "intranet", "corp", "home", "home.arpa", "localdomain"];
+
+    /// <summary>The http(s) address to open for a stored URI, or null for anything else (file paths, app links, programs).</summary>
+    public static string? WebUrl(string? uri)
+    {
+        if (string.IsNullOrWhiteSpace(uri)) return null;
+        uri = uri.Trim();
+        var candidate = uri.Contains("://") ? uri : "https://" + uri;
+        if (!Uri.TryCreate(candidate, UriKind.Absolute, out var u) || u.Scheme is not ("http" or "https") || string.IsNullOrEmpty(u.Host))
+            return null;
+        return u.AbsoluteUri;
+    }
+
+    /// <summary>False for hosts that only exist on a local network; their names must not be sent to the icon service.</summary>
+    public static bool IsPublicHost(string host)
+    {
+        if (Uri.CheckHostName(host) != UriHostNameType.Dns || !host.Contains('.')) return false;
+        foreach (var suffix in PrivateSuffixes)
+            if (host == suffix || host.EndsWith("." + suffix, StringComparison.Ordinal)) return false;
+        return true;
+    }
 
     private JsonNode? Login => _raw["login"];
     private JsonNode? Card => _raw["card"];
@@ -148,6 +170,8 @@ public sealed class VaultItem
     };
 
     public CopyAction? TotpCopy => HasTotp ? new("One-time code", CurrentTotp, true) : null;
+
+    public CopyAction? WebsiteCopy => Uris.Count > 0 ? new("Website", () => Uris[0], false) : null;
 
     public IReadOnlyList<ItemField> GetFields()
     {

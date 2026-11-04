@@ -71,6 +71,7 @@ internal sealed class WindowsPlatform : IPlatform
         if (hwnd == 0) return null;
         Native.GetWindowThreadProcessId(hwnd, out var pid);
         if (pid == Environment.ProcessId) return null;
+        if (IsShellWindow(hwnd)) return null;
 
         var buffer = stackalloc char[512];
         var len = Native.GetWindowTextW(hwnd, buffer, 512);
@@ -88,6 +89,19 @@ internal sealed class WindowsPlatform : IPlatform
         return new ForeignWindow(hwnd, title, app, (int)pid);
     }
 
+    private static readonly string[] ShellClasses =
+    [
+        "Shell_TrayWnd", "Shell_SecondaryTrayWnd", "Progman", "WorkerW", "NotifyIconOverflowWindow",
+        "TopLevelWindowForOverflowXamlIsland", "Windows.UI.Core.CoreWindow",
+    ];
+
+    private static unsafe bool IsShellWindow(nint hwnd)
+    {
+        var buffer = stackalloc char[64];
+        var len = Native.GetClassNameW(hwnd, buffer, 64);
+        return len > 0 && ShellClasses.Contains(new string(buffer, 0, len));
+    }
+
     public PixelPoint? AnchorPoint(ForeignWindow? target)
     {
         if (target != null && Native.GetWindowRect(target.Handle, out var r) != 0 && r.Right > r.Left)
@@ -96,6 +110,15 @@ internal sealed class WindowsPlatform : IPlatform
     }
 
     public void AttachWindow(Window window) => _window = window;
+
+    public void ExcludeFromCapture(Window window)
+    {
+        var hwnd = window.TryGetPlatformHandle()?.Handle ?? 0;
+        if (hwnd != 0 && Native.SetWindowDisplayAffinity(hwnd, Native.WDA_EXCLUDEFROMCAPTURE) == 0)
+            Log.Write($"display affinity: error {Marshal.GetLastPInvokeError()}");
+    }
+
+    public Vault.IQuickUnlockProvider QuickUnlock { get; } = new WindowsHello();
 
     public void AfterShow()
     {
@@ -263,6 +286,7 @@ internal sealed class WindowsPlatform : IPlatform
         public const ushort VK_TAB = 0x09, VK_RETURN = 0x0D;
         public const uint KEYEVENTF_KEYUP = 0x2, KEYEVENTF_UNICODE = 0x4;
         public const uint CF_UNICODETEXT = 13, GMEM_MOVEABLE = 0x2;
+        public const uint WDA_EXCLUDEFROMCAPTURE = 0x11;
 
         [StructLayout(LayoutKind.Sequential)]
         public struct POINT
@@ -333,6 +357,8 @@ internal sealed class WindowsPlatform : IPlatform
         [DllImport("user32.dll")] public static extern int SetForegroundWindow(nint hWnd);
         [DllImport("user32.dll")] public static extern int AllowSetForegroundWindow(int pid);
         [DllImport("user32.dll")] public static extern int GetWindowTextW(nint hWnd, char* text, int max);
+        [DllImport("user32.dll")] public static extern int GetClassNameW(nint hWnd, char* name, int max);
+        [DllImport("user32.dll", SetLastError = true)] public static extern int SetWindowDisplayAffinity(nint hWnd, uint affinity);
         [DllImport("user32.dll")] public static extern uint GetWindowThreadProcessId(nint hWnd, out uint pid);
         [DllImport("user32.dll")] public static extern int GetWindowRect(nint hWnd, out RECT rect);
         [DllImport("user32.dll")] public static extern int GetCursorPos(out POINT p);

@@ -105,6 +105,11 @@
           </ScrollViewer>
         </DockPanel>
 
+        <StackPanel x:Name="HelpPanel" IsVisible="False" Margin="24,16,24,18" Spacing="8">
+          <TextBlock Text="Keyboard shortcuts" FontSize="15" FontWeight="SemiBold" Foreground="{DynamicResource BqText}" />
+          <StackPanel x:Name="HelpList" />
+        </StackPanel>
+
         <StackPanel x:Name="MessagePanel" IsVisible="False" Margin="24,22,24,24" Spacing="6">
           <TextBlock x:Name="MessageTitle" FontSize="15" FontWeight="SemiBold" Foreground="{DynamicResource BqText}" TextWrapping="Wrap" />
           <TextBlock x:Name="MessageBody" FontSize="13" Foreground="{DynamicResource BqMuted}" TextWrapping="Wrap" />

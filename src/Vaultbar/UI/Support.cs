@@ -171,7 +171,8 @@ public sealed class FaviconService
 
     private async Task<Bitmap?> LoadAsync(string host)
     {
-        if (host.Length > 253 || host.Any(c => !(char.IsAsciiLetterOrDigit(c) || c is '.' or '-'))) return null;
+        if (host.Length > 253 || host.Any(c => !(char.IsAsciiLetterOrDigit(c) || c is '.' or '-')) || !VaultItem.IsPublicHost(host)) return null;
+        if (!BaseUrl.StartsWith("https://", StringComparison.OrdinalIgnoreCase)) return null;
         var file = Path.Combine(_dir, host + ".png");
         var miss = file + ".miss";
         try

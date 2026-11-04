@@ -20,6 +20,7 @@ public partial class QuickWindow : Window
         Search,
         Details,
         Reprompt,
+        Help,
     }
 
     private static readonly KeyModifiers Primary = OperatingSystem.IsMacOS() ? KeyModifiers.Meta : KeyModifiers.Control;
@@ -34,6 +35,7 @@ public partial class QuickWindow : Window
     private ForeignWindow? _target;
     private Mode _mode;
     private Mode _modeBeforeReprompt;
+    private Mode _modeBeforeHelp;
     private Func<Task>? _afterReprompt;
     private VaultItem? _repromptItem;
     private VaultItem? _detailItem;
@@ -95,11 +97,14 @@ public partial class QuickWindow : Window
         UpdateMode();
         PlaceOnScreen(target);
         Show();
+        if (_app.Config.HideFromScreenCapture) _app.Platform.ExcludeFromCapture(this);
         Activate();
         _app.Platform.AfterShow();
         _shownAt = Environment.TickCount64;
         _app.Vault.Touch();
         Dispatcher.UIThread.Post(FocusInput, DispatcherPriority.Input);
+        if (_mode == Mode.Locked && _app.Vault.CanQuickUnlock)
+            Dispatcher.UIThread.Post(() => _ = QuickUnlockAsync(), DispatcherPriority.Background);
     }
 
     public void Dismiss()
@@ -116,7 +121,7 @@ public partial class QuickWindow : Window
     public void OnVaultChanged()
     {
         if (!IsVisible) return;
-        if (_mode is Mode.Search or Mode.Details or Mode.Reprompt && _app.Vault.State == VaultState.Unlocked)
+        if (_mode is Mode.Search or Mode.Details or Mode.Reprompt or Mode.Help && _app.Vault.State == VaultState.Unlocked)
         {
             if (_mode == Mode.Search) Refresh();
             UpdateFooter();
@@ -146,7 +151,9 @@ public partial class QuickWindow : Window
                 break;
             case VaultState.Locked:
                 SetMode(Mode.Locked);
-                ShowMessage($"Unlock {vault.Email}", "Enter your Bitwarden master password. Vaultbar reads the vault that the Bitwarden desktop app keeps on this device.");
+                ShowMessage($"Unlock {vault.Email}", vault.CanQuickUnlock
+                    ? $"Use {vault.QuickUnlock!.Name}, or enter your Bitwarden master password."
+                    : "Enter your Bitwarden master password. Vaultbar reads the vault that the Bitwarden desktop app keeps on this device.");
                 break;
             case VaultState.Error:
                 SetMode(Mode.Message);
@@ -171,6 +178,7 @@ public partial class QuickWindow : Window
         PasswordBox.IsReadOnly = mode == Mode.Busy;
         ResultsScroll.IsVisible = mode == Mode.Search && _rows.Count > 0;
         DetailsPanel.IsVisible = mode == Mode.Details;
+        HelpPanel.IsVisible = mode == Mode.Help;
         MessagePanel.IsVisible = mode is Mode.Message or Mode.Locked or Mode.Reprompt or Mode.Busy
                                  || mode == Mode.Search && _rows.Count == 0;
         HeaderIcon.Data = ResultRow.Resource(passwordInput || mode == Mode.Message ? "IconLock" : "IconSearch");
@@ -248,7 +256,7 @@ public partial class QuickWindow : Window
     private ResultRow MakeRow(VaultItem item)
     {
         var row = new ResultRow(item);
-        if (_app.Config.ShowFavicons && _app.Vault.ShowFavicons && item.Type == ItemType.Login && item.PrimaryHost is { } host)
+        if (_app.Config.ShowFavicons && _app.Vault.ShowFavicons && item.Type == ItemType.Login && item.IconHost is { } host)
             _ = LoadIconAsync(row, host);
         return row;
     }
@@ -300,15 +308,27 @@ public partial class QuickWindow : Window
         var shift = mods.HasFlag(KeyModifiers.Shift);
         var alt = mods.HasFlag(KeyModifiers.Alt);
 
-        if (e.Key == Key.Escape && _mode is not (Mode.Details or Mode.Reprompt or Mode.Search))
+        if (e.Key == Key.Escape && _mode is not (Mode.Details or Mode.Reprompt or Mode.Search or Mode.Help))
         {
             Dismiss();
             e.Handled = true;
             return;
         }
 
+        if ((e.Key == Key.F1 || e.Key == Key.OemQuestion && primary) && _mode is Mode.Search or Mode.Details or Mode.Help)
+        {
+            if (_mode == Mode.Help) RestoreMode(_modeBeforeHelp);
+            else ShowHelp();
+            e.Handled = true;
+            return;
+        }
+
         switch (_mode)
         {
+            case Mode.Help:
+                if (e.Key is Key.Escape or Key.Left or Key.Back or Key.Enter) RestoreMode(_modeBeforeHelp);
+                e.Handled = true;
+                break;
             case Mode.Busy:
                 e.Handled = true;
                 break;
@@ -321,6 +341,11 @@ public partial class QuickWindow : Window
                     e.Handled = true;
                     _ = UnlockAsync();
                 }
+                else if (e.Key == Key.H && primary && _app.Vault.CanQuickUnlock)
+                {
+                    e.Handled = true;
+                    _ = QuickUnlockAsync();
+                }
                 break;
             case Mode.Reprompt:
                 if (e.Key == Key.Escape)
@@ -329,10 +354,7 @@ public partial class QuickWindow : Window
                     _repromptItem = null;
                     _afterReprompt = null;
                     PasswordBox.Text = "";
-                    SetMode(_modeBeforeReprompt);
-                    ResultsScroll.IsVisible = _modeBeforeReprompt == Mode.Search && _rows.Count > 0;
-                    MessagePanel.IsVisible = _modeBeforeReprompt == Mode.Search && _rows.Count == 0;
-                    FocusInput();
+                    RestoreMode(_modeBeforeReprompt);
                 }
                 else if (e.Key == Key.Enter)
                 {
@@ -382,6 +404,9 @@ public partial class QuickWindow : Window
             case Key.C when primary && item != null && SearchBox.SelectionStart == SearchBox.SelectionEnd:
                 _ = CopyAsync(item, alt ? item.TotpCopy : shift ? item.SecondaryCopy : item.PrimaryCopy);
                 return true;
+            case Key.U when primary && shift && item != null:
+                _ = CopyAsync(item, item.WebsiteCopy);
+                return true;
             case Key.U when primary && item != null:
                 _ = CopyAsync(item, item.Type == ItemType.Login ? item.SecondaryCopy : null);
                 return true;
@@ -390,6 +415,9 @@ public partial class QuickWindow : Window
                 return true;
             case Key.T when primary && item != null:
                 _ = CopyAsync(item, item.TotpCopy);
+                return true;
+            case Key.O when primary && shift && item != null:
+                OpenInWebVault(item);
                 return true;
             case Key.O when primary && item != null:
                 OpenUrl(item);
@@ -412,9 +440,7 @@ public partial class QuickWindow : Window
         {
             case Key.Escape or Key.Left or Key.Back:
                 CloseDetails();
-                SetMode(Mode.Search);
-                ResultsScroll.IsVisible = _rows.Count > 0;
-                MessagePanel.IsVisible = _rows.Count == 0;
+                RestoreMode(Mode.Search);
                 return true;
             case Key.Down:
                 SelectDetail(Math.Min(_detailSelected + 1, _details.Count - 1));
@@ -426,8 +452,15 @@ public partial class QuickWindow : Window
                 row.Revealed = !row.Revealed;
                 return true;
             case Key.Enter when row != null && primary && row.Field.Kind == FieldKind.Url:
-                _app.Platform.OpenUrl(row.Field.Value() ?? "");
-                Dismiss();
+                if (VaultItem.WebUrl(row.Field.Value()) is { } url)
+                {
+                    _app.Platform.OpenUrl(url);
+                    Dismiss();
+                }
+                else
+                {
+                    Toast("Only web addresses can be opened");
+                }
                 return true;
             case Key.Enter when row != null:
             case Key.C when primary && !shift && !alt && row != null:
@@ -435,6 +468,12 @@ public partial class QuickWindow : Window
                 return true;
             case Key.C when primary && _detailItem != null:
                 _ = CopyAsync(_detailItem, alt ? _detailItem.TotpCopy : _detailItem.SecondaryCopy);
+                return true;
+            case Key.U when primary && shift && _detailItem != null:
+                _ = CopyAsync(_detailItem, _detailItem.WebsiteCopy);
+                return true;
+            case Key.O when primary && shift && _detailItem != null:
+                OpenInWebVault(_detailItem);
                 return true;
             case Key.O when primary && _detailItem != null:
                 OpenUrl(_detailItem);
@@ -463,9 +502,30 @@ public partial class QuickWindow : Window
         }
     }
 
-    private Task RunGuardedAsync(VaultItem item, bool sensitive, Func<Task> action)
+    private async Task RunGuardedAsync(VaultItem item, bool sensitive, Func<Task> action)
     {
-        if (!sensitive || !item.Reprompt || _repromptPassed.Contains(item.Id)) return action();
+        if (!sensitive || !item.Reprompt || _repromptPassed.Contains(item.Id))
+        {
+            await action();
+            return;
+        }
+
+        if (_app.Vault.CanQuickUnlock)
+        {
+            var before = _mode;
+            SetMode(Mode.Busy);
+            ShowMessage($"“{item.Name}” is protected", $"Confirm with {_app.Vault.QuickUnlock!.Name}.");
+            var status = await _app.Vault.VerifyWithQuickUnlockAsync();
+            BringBack();
+            RestoreMode(before);
+            if (status == QuickUnlockStatus.Success)
+            {
+                _repromptPassed.Add(item.Id);
+                await action();
+                return;
+            }
+        }
+
         _repromptItem = item;
         _afterReprompt = action;
         _modeBeforeReprompt = _mode;
@@ -473,7 +533,6 @@ public partial class QuickWindow : Window
         SetMode(Mode.Reprompt);
         ShowMessage($"“{item.Name}” is protected", "Re-enter your master password to use this item.");
         FocusInput();
-        return Task.CompletedTask;
     }
 
     private Task CopyAsync(VaultItem item, CopyAction? action)
@@ -589,6 +648,101 @@ public partial class QuickWindow : Window
         Dismiss();
     }
 
+    private void OpenInWebVault(VaultItem item)
+    {
+        if (VaultItem.WebUrl(_app.Vault.WebVaultUrl) is not { } baseUrl)
+        {
+            Toast("No web vault address configured");
+            return;
+        }
+        _app.Platform.OpenUrl($"{baseUrl.TrimEnd('/')}/#/vault?itemId={Uri.EscapeDataString(item.Id)}&action=view");
+        Dismiss();
+    }
+
+    private void RestoreMode(Mode mode)
+    {
+        SetMode(mode);
+        ResultsScroll.IsVisible = mode == Mode.Search && _rows.Count > 0;
+        MessagePanel.IsVisible = mode == Mode.Search && _rows.Count == 0;
+        FocusInput();
+    }
+
+    private void BringBack()
+    {
+        if (!IsVisible) return;
+        Activate();
+        _app.Platform.AfterShow();
+    }
+
+    private void ShowHelp()
+    {
+        _modeBeforeHelp = _mode;
+        var mod = OperatingSystem.IsMacOS() ? "⌘" : "Ctrl";
+        var opt = OperatingSystem.IsMacOS() ? "⌥" : "Alt";
+        var shift = OperatingSystem.IsMacOS() ? "⇧" : "Shift";
+        (string[] Keys, string Label)[] rows =
+        [
+            (["Enter"], "Fill login · copy note · open details"),
+            ([shift, "Enter"], "Fill password only"),
+            ([mod, "C"], "Copy password, card number or note"),
+            ([mod, shift, "C"], "Copy username or security code"),
+            ([mod, opt, "C"], "Copy one-time code"),
+            ([mod, shift, "U"], "Copy website"),
+            ([mod, "O"], "Open website"),
+            ([mod, shift, "O"], "Open in Bitwarden web vault"),
+            (["Tab"], "Item details"),
+            (["Space"], "Reveal hidden field (details)"),
+            ([mod, "L"], "Lock"),
+            (["Esc"], "Back, clear search, close"),
+            (["F1"], "Keyboard shortcuts"),
+        ];
+
+        HelpList.Children.Clear();
+        foreach (var (keys, label) in rows)
+        {
+            var line = new DockPanel { Margin = new Thickness(0, 2) };
+            var group = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 3, Width = 150 };
+            foreach (var k in keys)
+                group.Children.Add(new Border { Classes = { "kbd" }, Child = new TextBlock { Text = k } });
+            line.Children.Add(group);
+            line.Children.Add(new TextBlock { Text = label, Classes = { "hint" }, VerticalAlignment = VerticalAlignment.Center });
+            HelpList.Children.Add(line);
+        }
+        SetMode(Mode.Help);
+        MessagePanel.IsVisible = false;
+    }
+
+    private async Task QuickUnlockAsync()
+    {
+        if (_mode != Mode.Locked || _app.Vault.QuickUnlock is not { } provider) return;
+        SetMode(Mode.Busy);
+        PasswordBox.IsVisible = false;
+        SearchBox.IsVisible = true;
+        ShowMessage($"Unlock {_app.Vault.Email}", $"Waiting for {provider.Name}…");
+        var (_, error) = await _app.Vault.QuickUnlockAsync();
+        BringBack();
+        UpdateMode();
+        if (error != null) ShowError(error);
+        FocusInput();
+    }
+
+    private async Task OfferQuickUnlockAsync()
+    {
+        if (_app.Vault.QuickUnlock is not { } provider || !await _app.Vault.ShouldOfferQuickUnlockAsync()) return;
+        SetMode(Mode.Busy);
+        ShowMessage($"Set up {provider.Name}", $"Confirm with {provider.Name} to unlock Vaultbar without your master password from now on.");
+        var status = await _app.Vault.SetUpQuickUnlockAsync();
+        BringBack();
+        UpdateMode();
+        FocusInput();
+        Toast(status switch
+        {
+            QuickUnlockStatus.Success => $"{provider.Name} is set up",
+            QuickUnlockStatus.Canceled => $"{provider.Name} skipped · turn it on from the tray menu",
+            _ => $"Could not set up {provider.Name}",
+        });
+    }
+
     private Task OpenDetailsAsync(VaultItem item) => RunGuardedAsync(item, item.Reprompt, () =>
     {
         _detailItem = item;
@@ -637,6 +791,7 @@ public partial class QuickWindow : Window
         }
         UpdateMode();
         FocusInput();
+        await OfferQuickUnlockAsync();
     }
 
     private async Task RepromptAsync()
@@ -659,10 +814,7 @@ public partial class QuickWindow : Window
         _repromptItem = null;
         var action = _afterReprompt;
         _afterReprompt = null;
-        SetMode(_modeBeforeReprompt);
-        ResultsScroll.IsVisible = _modeBeforeReprompt == Mode.Search && _rows.Count > 0;
-        MessagePanel.IsVisible = _modeBeforeReprompt == Mode.Search && _rows.Count == 0;
-        FocusInput();
+        RestoreMode(_modeBeforeReprompt);
         if (action != null) await action();
     }
 
@@ -721,7 +873,11 @@ public partial class QuickWindow : Window
         {
             case Mode.Locked:
                 hints.Add((["Enter"], "Unlock"));
+                if (_app.Vault.CanQuickUnlock) hints.Add(([mod, "H"], _app.Vault.QuickUnlock!.Name));
                 hints.Add((["Esc"], "Close"));
+                break;
+            case Mode.Help:
+                hints.Add((["Esc"], "Back"));
                 break;
             case Mode.Reprompt:
                 hints.Add((["Enter"], "Confirm"));
@@ -747,6 +903,7 @@ public partial class QuickWindow : Window
                 hints.Add((["Tab"], "Details"));
                 break;
             case Mode.Search:
+                hints.Add((["F1"], "Shortcuts"));
                 hints.Add((["Esc"], "Close"));
                 break;
             case Mode.Details:

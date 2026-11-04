@@ -19,13 +19,20 @@ public sealed class VaultService : IDisposable
     private readonly List<SymmetricKey> _keys = new();
     private SymmetricKey? _userKey;
     private Dictionary<string, SymmetricKey> _orgKeys = new();
-    private byte[]? _masterKeyHash;
+    private byte[]? _userKeyHash;
     private StoreSnapshot? _snapshot;
     private FileSystemWatcher? _watcher;
     private Timer? _reloadTimer;
     private DateTime _lastActivity = DateTime.UtcNow;
+    private readonly QuickUnlockStore _quickStore;
 
-    public VaultService(Config config) => _config = config;
+    public VaultService(Config config, string? quickUnlockPath = null)
+    {
+        _config = config;
+        _quickStore = new QuickUnlockStore(quickUnlockPath ?? Path.Combine(Paths.CacheDir, "quick-unlock.dat"));
+    }
+
+    public IQuickUnlockProvider? QuickUnlock { get; set; }
 
     public event Action? Changed;
 
@@ -37,6 +44,7 @@ public sealed class VaultService : IDisposable
     public int FailedItems { get; private set; }
     public DateTimeOffset? LastSync { get; private set; }
     public string IconsBaseUrl { get; private set; } = "https://icons.bitwarden.net";
+    public string WebVaultUrl { get; private set; } = "https://vault.bitwarden.com";
     public bool ShowFavicons { get; private set; } = true;
     public TimeSpan? IdleTimeout { get; private set; }
 
@@ -77,38 +85,9 @@ public sealed class VaultService : IDisposable
         try
         {
             var snapshot = await Task.Run(() => DesktopStore.Read(StorePath));
-            var masterKey = await Task.Run(() => MasterKey.Derive(password, snapshot.Salt, snapshot.Kdf));
-            byte[] userKeyBytes;
-            byte[] masterKeyHash;
-            try
-            {
-                userKeyBytes = UnwrapUserKey(snapshot.WrappedUserKey, masterKey);
-                masterKeyHash = SHA256.HashData(masterKey);
-            }
-            catch (CryptographicException)
-            {
-                return "Invalid master password.";
-            }
-            finally
-            {
-                CryptographicOperations.ZeroMemory(masterKey);
-            }
-
-            lock (_gate)
-            {
-                _masterKeyHash = masterKeyHash;
-                _userKey = SymmetricKey.FromBytes(userKeyBytes);
-                CryptographicOperations.ZeroMemory(userKeyBytes);
-                _keys.Add(_userKey);
-                LoadItems(snapshot);
-            }
-
-            ApplyMetadata(snapshot);
-            State = VaultState.Unlocked;
-            Error = null;
-            Touch();
-            StartWatching(snapshot.Path);
-            Changed?.Invoke();
+            var userKeyBytes = await Task.Run(() => UnwrapWithPassword(password, snapshot));
+            if (userKeyBytes is null) return "Invalid master password.";
+            Open(snapshot, userKeyBytes);
             return null;
         }
         catch (NotSupportedException ex)
@@ -123,20 +102,204 @@ public sealed class VaultService : IDisposable
         }
     }
 
+    /// <summary>True only when the password unwraps the key the vault is unlocked with.</summary>
     public async Task<bool> VerifyMasterPasswordAsync(string password)
     {
         var snapshot = _snapshot;
-        var expected = _masterKeyHash;
-        if (snapshot is null || expected is null) return false;
-        var key = await Task.Run(() => MasterKey.Derive(password, snapshot.Salt, snapshot.Kdf));
+        if (snapshot is null || State != VaultState.Unlocked) return false;
+        var key = await Task.Run(() => UnwrapWithPassword(password, snapshot));
+        return key != null && MatchesUserKey(key);
+    }
+
+    public QuickUnlockSetting QuickUnlockSetting =>
+        QuickUnlock is null || _snapshot is null ? QuickUnlockSetting.Off : _quickStore.SettingFor(_snapshot.UserId);
+
+    public bool CanQuickUnlock => QuickUnlockSetting == QuickUnlockSetting.On;
+
+    public async Task<bool> ShouldOfferQuickUnlockAsync() =>
+        State == VaultState.Unlocked && QuickUnlockSetting == QuickUnlockSetting.NotSetUp && await QuickUnlock!.IsAvailableAsync();
+
+    public async Task<(QuickUnlockStatus Status, string? Error)> QuickUnlockAsync()
+    {
+        var provider = QuickUnlock;
+        if (provider is null || StorePath is null) return (QuickUnlockStatus.Unavailable, null);
         try
         {
-            return CryptographicOperations.FixedTimeEquals(SHA256.HashData(key), expected);
+            var snapshot = await Task.Run(() => DesktopStore.Read(StorePath));
+            if (_quickStore.Load(snapshot.UserId) is not { } entry) return (QuickUnlockStatus.Unavailable, null);
+            var (status, signature) = await provider.SignAsync(entry.Challenge, createKey: false);
+            if (status == QuickUnlockStatus.Unavailable) _quickStore.Delete();
+            if (status != QuickUnlockStatus.Success || signature is null) return (status, null);
+
+            byte[] userKey;
+            try
+            {
+                userKey = QuickUnlockStore.Unwrap(entry, signature);
+                CheckUserKey(snapshot, userKey);
+            }
+            catch (CryptographicException ex)
+            {
+                Log.Write($"quick unlock: {ex.Message}");
+                _quickStore.Delete();
+                return (QuickUnlockStatus.Failed, $"{provider.Name} no longer matches this vault. Enter your master password to set it up again.");
+            }
+            finally
+            {
+                CryptographicOperations.ZeroMemory(signature);
+            }
+
+            Open(snapshot, userKey);
+            return (QuickUnlockStatus.Success, null);
+        }
+        catch (Exception ex)
+        {
+            Log.Write($"quick unlock: {ex}");
+            return (QuickUnlockStatus.Failed, ex is StoreException ? ex.Message : $"{provider.Name} unlock failed: {ex.Message}");
+        }
+    }
+
+    public async Task<QuickUnlockStatus> SetUpQuickUnlockAsync()
+    {
+        var provider = QuickUnlock;
+        var snapshot = _snapshot;
+        byte[] userKey;
+        lock (_gate)
+        {
+            if (provider is null || snapshot is null || _userKey is not { } key) return QuickUnlockStatus.Unavailable;
+            userKey = key.Mac is null ? key.Enc.ToArray() : [.. key.Enc, .. key.Mac];
+        }
+
+        try
+        {
+            var challenge = RandomNumberGenerator.GetBytes(32);
+            var (status, signature) = await provider.SignAsync(challenge, createKey: true);
+            if (status == QuickUnlockStatus.Canceled) _quickStore.SaveDeclined(snapshot.UserId);
+            if (status != QuickUnlockStatus.Success || signature is null) return status;
+            try
+            {
+                _quickStore.Save(new QuickUnlockEntry(snapshot.UserId, challenge, QuickUnlockStore.Wrap(userKey, signature, challenge, snapshot.UserId)));
+            }
+            finally
+            {
+                CryptographicOperations.ZeroMemory(signature);
+            }
+            return QuickUnlockStatus.Success;
+        }
+        catch (Exception ex)
+        {
+            Log.Write($"quick unlock setup: {ex}");
+            return QuickUnlockStatus.Failed;
         }
         finally
         {
-            CryptographicOperations.ZeroMemory(key);
+            CryptographicOperations.ZeroMemory(userKey);
         }
+    }
+
+    /// <summary>Confirms the user with the device key, for items with master password re-prompt.</summary>
+    public async Task<QuickUnlockStatus> VerifyWithQuickUnlockAsync()
+    {
+        var provider = QuickUnlock;
+        var snapshot = _snapshot;
+        if (provider is null || snapshot is null || State != VaultState.Unlocked || _quickStore.Load(snapshot.UserId) is not { } entry)
+            return QuickUnlockStatus.Unavailable;
+        var (status, signature) = await provider.SignAsync(entry.Challenge, createKey: false);
+        if (status != QuickUnlockStatus.Success || signature is null) return status;
+        try
+        {
+            var key = QuickUnlockStore.Unwrap(entry, signature);
+            return MatchesUserKey(key) ? QuickUnlockStatus.Success : QuickUnlockStatus.Failed;
+        }
+        catch (CryptographicException)
+        {
+            return QuickUnlockStatus.Failed;
+        }
+        finally
+        {
+            CryptographicOperations.ZeroMemory(signature);
+        }
+    }
+
+    public async Task SetQuickUnlockEnabledAsync(bool enabled)
+    {
+        if (QuickUnlock is not { } provider || _snapshot is not { } snapshot) return;
+        if (enabled)
+        {
+            _quickStore.Delete();
+            if (State == VaultState.Unlocked) await SetUpQuickUnlockAsync();
+            return;
+        }
+        _quickStore.SaveDeclined(snapshot.UserId);
+        await provider.DeleteKeyAsync();
+    }
+
+    private static byte[]? UnwrapWithPassword(string password, StoreSnapshot snapshot)
+    {
+        var masterKey = MasterKey.Derive(password, snapshot.Salt, snapshot.Kdf);
+        try
+        {
+            return UnwrapUserKey(snapshot.WrappedUserKey, masterKey);
+        }
+        catch (CryptographicException)
+        {
+            return null;
+        }
+        finally
+        {
+            CryptographicOperations.ZeroMemory(masterKey);
+        }
+    }
+
+    private bool MatchesUserKey(byte[] userKey)
+    {
+        try
+        {
+            var expected = _userKeyHash;
+            return expected != null && CryptographicOperations.FixedTimeEquals(SHA256.HashData(userKey), expected);
+        }
+        finally
+        {
+            CryptographicOperations.ZeroMemory(userKey);
+        }
+    }
+
+    /// <exception cref="CryptographicException">The key does not decrypt this account's data.</exception>
+    private static void CheckUserKey(StoreSnapshot snapshot, byte[] userKey)
+    {
+        using var key = SymmetricKey.FromBytes(userKey);
+        var probe = snapshot.EncPrivateKey is { } pk && EncString.TypeOf(pk) == 2 ? pk : null;
+        if (probe is null)
+        {
+            foreach (var (_, node) in snapshot.Ciphers)
+            {
+                if (node is not JsonObject cipher || Str(cipher["organizationId"]) != null) continue;
+                if ((Str(cipher["key"]) ?? Str(cipher["name"])) is { } s && EncString.TypeOf(s) == 2)
+                {
+                    probe = s;
+                    break;
+                }
+            }
+        }
+        if (probe != null) CryptographicOperations.ZeroMemory(EncString.DecryptBytes(probe, key));
+    }
+
+    private void Open(StoreSnapshot snapshot, byte[] userKeyBytes)
+    {
+        lock (_gate)
+        {
+            _userKeyHash = SHA256.HashData(userKeyBytes);
+            _userKey = SymmetricKey.FromBytes(userKeyBytes);
+            CryptographicOperations.ZeroMemory(userKeyBytes);
+            _keys.Add(_userKey);
+            LoadItems(snapshot);
+        }
+
+        ApplyMetadata(snapshot);
+        State = VaultState.Unlocked;
+        Error = null;
+        Touch();
+        StartWatching(snapshot.Path);
+        Changed?.Invoke();
     }
 
     public void Lock()
@@ -153,8 +316,8 @@ public sealed class VaultService : IDisposable
             _keys.Clear();
             _orgKeys = new();
             _userKey = null;
-            if (_masterKeyHash != null) CryptographicOperations.ZeroMemory(_masterKeyHash);
-            _masterKeyHash = null;
+            if (_userKeyHash != null) CryptographicOperations.ZeroMemory(_userKeyHash);
+            _userKeyHash = null;
         }
         State = VaultState.Locked;
         GC.Collect();
@@ -181,6 +344,7 @@ public sealed class VaultService : IDisposable
         Email = s.Email;
         LastSync = s.LastSync;
         IconsBaseUrl = s.IconsBaseUrl;
+        WebVaultUrl = s.WebVaultUrl;
         ShowFavicons = s.ShowFavicons;
         IdleTimeout = _config.LockAfterMinutes is { } m
             ? (m > 0 ? TimeSpan.FromMinutes(m) : null)

@@ -22,12 +22,14 @@ public sealed class AppController
         Config = Config.Load();
         Vault = new VaultService(Config);
         Platform = IPlatform.Create();
+        if (Config.WindowsHello) Vault.QuickUnlock = Platform.QuickUnlock;
         Usage = new UsageStore();
         Icons = new FaviconService();
     }
 
     public Config Config { get; }
     public VaultService Vault { get; }
+    public static AppController? Current { get; private set; }
     public IPlatform Platform { get; }
     public UsageStore Usage { get; }
     public FaviconService Icons { get; }
@@ -36,6 +38,8 @@ public sealed class AppController
 
     public void Start(bool show)
     {
+        Current = this;
+        AppDomain.CurrentDomain.UnhandledException += (_, _) => ClearClipboardOnCrash();
         Vault.Probe();
         _window = new QuickWindow(this);
         Platform.AttachWindow(_window);
@@ -111,6 +115,7 @@ public sealed class AppController
     public void Lock()
     {
         Vault.Lock();
+        _ = ClearCopiedSecretAsync();
         _window?.OnVaultChanged();
     }
 
@@ -132,17 +137,34 @@ public sealed class AppController
         }
     }
 
-    public async void Quit()
+    private async Task ClearCopiedSecretAsync()
     {
+        if (_clipboardToken is not { } token || _clipboardClear is not { IsCancellationRequested: false } pending) return;
+        pending.Cancel();
         try
         {
-            if (_clipboardToken != null && _clipboardClear is { IsCancellationRequested: false })
-                await Platform.ClearClipboardAsync(_clipboardToken).WaitAsync(TimeSpan.FromMilliseconds(500));
+            await Platform.ClearClipboardAsync(token).WaitAsync(TimeSpan.FromMilliseconds(500));
         }
         catch (Exception ex)
         {
-            Log.Write($"quit: {ex.Message}");
+            Log.Write($"clipboard clear: {ex.Message}");
         }
+    }
+
+    public void ClearClipboardOnCrash()
+    {
+        try
+        {
+            ClearCopiedSecretAsync().Wait(700);
+        }
+        catch
+        {
+        }
+    }
+
+    public async void Quit()
+    {
+        await ClearCopiedSecretAsync();
         Usage.Flush();
         Vault.Dispose();
         Platform.Dispose();
@@ -159,11 +181,35 @@ public sealed class AppController
         var quit = new NativeMenuItem("Quit Vaultbar");
         quit.Click += (_, _) => Quit();
 
+        var menu = new NativeMenu { open, lockItem };
+        if (Vault.QuickUnlock is { } quick)
+        {
+            var hello = new NativeMenuItem($"Unlock with {quick.Name}") { ToggleType = NativeMenuItemToggleType.CheckBox };
+            void Sync() => hello.IsChecked = Vault.QuickUnlockSetting != QuickUnlockSetting.Off;
+            Sync();
+            menu.NeedsUpdate += (_, _) => Sync();
+            Vault.Changed += () => Dispatcher.UIThread.Post(Sync);
+            hello.Click += async (_, _) =>
+            {
+                await Vault.SetQuickUnlockEnabledAsync(Vault.QuickUnlockSetting == QuickUnlockSetting.Off);
+                Sync();
+            };
+            menu.Add(hello);
+            _ = RemoveUnlessAvailableAsync();
+
+            async Task RemoveUnlessAvailableAsync()
+            {
+                if (!await quick.IsAvailableAsync()) menu.Items.Remove(hello);
+            }
+        }
+        menu.Add(new NativeMenuItemSeparator());
+        menu.Add(quit);
+
         var tray = new TrayIcon
         {
             Icon = AppIcon.Create(),
             ToolTipText = $"Vaultbar ({HotkeyText})",
-            Menu = new NativeMenu { open, lockItem, new NativeMenuItemSeparator(), quit },
+            Menu = menu,
         };
         tray.Clicked += (_, _) => Show(null);
         TrayIcon.SetIcons(Application.Current!, new TrayIcons { tray });

@@ -34,6 +34,12 @@ public interface IPlatform : IDisposable
 
     void WatchSystemLock(Action onLock);
 
+    void ExcludeFromCapture(Window window)
+    {
+    }
+
+    Vault.IQuickUnlockProvider? QuickUnlock => null;
+
     static IPlatform Create()
     {
         if (OperatingSystem.IsWindows()) return new WindowsPlatform();
