@@ -242,7 +242,7 @@ public partial class QuickWindow : Window
         else
         {
             foreach (var item in Matcher.Search(items, query, _app.Usage)) _rows.Add(MakeRow(item));
-            if (_rows.Count == 0) ShowMessage($"No items match “{query.Trim()}”", "");
+            if (_rows.Count == 0) ShowMessage($"No items match “{query.Trim()}”", "Search matches names, usernames, websites and folders.");
         }
 
         ResultsScroll.IsVisible = _rows.Count > 0;
@@ -250,6 +250,7 @@ public partial class QuickWindow : Window
         MessageError.IsVisible = false;
         _selected = -1;
         Select(NextResult(-1, 1));
+        UpdateHints();
         ResultsScroll.Offset = default;
     }
 
@@ -701,7 +702,7 @@ public partial class QuickWindow : Window
         foreach (var (keys, label) in rows)
         {
             var line = new DockPanel { Margin = new Thickness(0, 2) };
-            var group = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 3, Width = 150 };
+            var group = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 3, Width = 128 };
             foreach (var k in keys)
                 group.Children.Add(new Border { Classes = { "kbd" }, Child = new TextBlock { Text = k } });
             line.Children.Add(group);
@@ -910,6 +911,8 @@ public partial class QuickWindow : Window
                 hints.Add((["Enter"], "Copy"));
                 if (_detailSelected >= 0 && _detailSelected < _details.Count && _details[_detailSelected].IsSecret)
                     hints.Add((["Space"], "Reveal"));
+                if (_detailSelected >= 0 && _detailSelected < _details.Count && _details[_detailSelected].Field.Kind == FieldKind.Url)
+                    hints.Add(([mod, "Enter"], "Open"));
                 hints.Add((["Esc"], "Back"));
                 break;
             case Mode.Message:
