@@ -20,6 +20,14 @@ public interface IPlatform : IDisposable
 
     void AfterShow();
 
+    void AfterStart(bool shown)
+    {
+    }
+
+    void AfterHide()
+    {
+    }
+
     /// <returns>Null when auto-type can run, otherwise why not.</returns>
     string? AutoTypeUnavailableReason(ForeignWindow? target);
 

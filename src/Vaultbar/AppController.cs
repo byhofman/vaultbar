@@ -16,12 +16,12 @@ public sealed class AppController
     private object? _clipboardToken;
     private CancellationTokenSource? _clipboardClear;
 
-    public AppController(IClassicDesktopStyleApplicationLifetime lifetime)
+    internal AppController(IClassicDesktopStyleApplicationLifetime lifetime, IPlatform platform)
     {
         _lifetime = lifetime;
         Config = Config.Load();
         Vault = new VaultService(Config);
-        Platform = IPlatform.Create();
+        Platform = platform;
         if (Config.WindowsHello) Vault.QuickUnlock = Platform.QuickUnlock;
         Usage = new UsageStore();
         Icons = new FaviconService();
@@ -33,12 +33,14 @@ public sealed class AppController
     public IPlatform Platform { get; }
     public UsageStore Usage { get; }
     public FaviconService Icons { get; }
+    internal QuickWindow? Window => _window;
     public string HotkeyText { get; private set; } = "";
     public string? HotkeyError { get; private set; }
 
     public void Start(bool show)
     {
         Current = this;
+        _lifetime.ShutdownRequested += (_, _) => OnSystemQuit();
         AppDomain.CurrentDomain.UnhandledException += (_, _) => ClearClipboardOnCrash();
         Vault.Probe();
         _window = new QuickWindow(this);
@@ -71,7 +73,15 @@ public sealed class AppController
         idle.Start();
 
         CreateTrayIcon();
+        if (Application.Current?.TryGetFeature(typeof(IActivatableLifetime)) is IActivatableLifetime activatable)
+        {
+            activatable.Activated += (_, e) =>
+            {
+                if (e.Kind == ActivationKind.Reopen) Show(Platform.CaptureForeground());
+            };
+        }
         if (show) Show(Platform.CaptureForeground());
+        Dispatcher.UIThread.Post(() => Platform.AfterStart(show), DispatcherPriority.Background);
     }
 
     private void OnHotkey()
@@ -149,6 +159,13 @@ public sealed class AppController
         {
             Log.Write($"clipboard clear: {ex.Message}");
         }
+    }
+
+    // Cmd+Q and logging out arrive here, not through Quit. Cancelling to run Quit instead would abort a logout.
+    private void OnSystemQuit()
+    {
+        ClearClipboardOnCrash();
+        Usage.Flush();
     }
 
     public void ClearClipboardOnCrash()

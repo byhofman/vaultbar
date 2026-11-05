@@ -33,6 +33,7 @@
 
   <ItemGroup>
     <InternalsVisibleTo Include="Vaultbar.Tests" />
+    <InternalsVisibleTo Include="Vaultbar.MacE2E" />
   </ItemGroup>
 
 </Project>
