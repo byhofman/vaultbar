@@ -1,11 +1,11 @@
 #!/usr/bin/env zsh
-# Installs (or removes) Vaultbar on macOS. No prompts; uses sudo only if /Applications is not writable.
+# Installs (or removes) Vaultbar on macOS. No prompts or admin rights; uses ~/Applications if /Applications is not writable.
 #   curl -fsSL https://raw.githubusercontent.com/byhofman/vaultbar/main/install/install-macos.sh | zsh
 #   curl -fsSL https://raw.githubusercontent.com/byhofman/vaultbar/main/install/install-macos.sh | zsh -s -- --uninstall
-# Options: --uninstall  --version vX.Y.Z  --archive path.tar.gz  --repo owner/name  --no-start
+# Options: --uninstall  --version vX.Y.Z  --archive path.tar.gz  --repo owner/name  --no-start  --dir path
 set -euo pipefail
 
-repo="byhofman/vaultbar" version="latest" archive="" uninstall=0 start=1
+repo="byhofman/vaultbar" version="latest" archive="" uninstall=0 start=1 apps=""
 while (( $# > 0 )); do
   case "$1" in
     --uninstall) uninstall=1 ;;
@@ -13,13 +13,16 @@ while (( $# > 0 )); do
     --archive) archive="$2"; shift ;;
     --repo) repo="$2"; shift ;;
     --no-start) start=0 ;;
+    --dir) apps="$2"; shift ;;
     *) print -u2 "unknown option: $1"; exit 2 ;;
   esac
   shift
 done
 
-apps=/Applications
-[[ -w $apps ]] || apps="$HOME/Applications"
+if [[ -z $apps ]]; then
+  apps=/Applications
+  [[ -w $apps ]] || apps="$HOME/Applications"
+fi
 app="$apps/Vaultbar.app"
 exe="$app/Contents/MacOS/vaultbar"
 link="$HOME/.local/bin/vaultbar"

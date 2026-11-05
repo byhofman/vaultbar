@@ -101,7 +101,7 @@ Uninstalling leaves your settings folder (see Configuration) in place.
 
 **Options:** install a specific release with `-Version v0.1.0` (PowerShell) or `--version v0.1.0` (bash/zsh). To
 install from an archive you already downloaded, use `-Archive <file>` or `--archive <file>`. The archives are
-`vaultbar-<win|linux|osx>-<x64|arm64>.zip/.tar.gz` on the releases page.
+`vaultbar-<win|linux|osx>-<x64|arm64>.zip/.tar.gz` on the releases page. On macOS, `--dir <folder>` installs somewhere other than `/Applications`.
 
 ### Platform notes
 
@@ -134,9 +134,9 @@ vaultbar shortcut     Linux/GNOME: bind the hotkey through GNOME settings
 
 | Setting | Default | |
 | --- | --- | --- |
-| `hotkey` | `Ctrl+Shift+Space` (`Cmd+Shift+Space` on macOS) | Modifiers `Ctrl`, `Shift`, `Alt`/`Option`, `Win`/`Super`/`Cmd` + `A`–`Z`, `0`–`9`, `F1`–`F24`, `Space` |
+| `hotkey` | `Ctrl+Shift+Space` (`Cmd+Shift+Space` on macOS) | Modifiers `Ctrl`, `Shift`, `Alt`/`Option`, `Win`/`Super`/`Cmd` + `A`–`Z`, `0`–`9`, `F1`–`F24` (macOS `F1`–`F20`), `Space` |
 | `lockAfterMinutes` | `null` | Idle lock. `null` follows the Bitwarden desktop vault timeout (numeric values; "on restart"/"never" mean no idle lock) |
-| `lockOnSystemLock` | `true` | Lock when the session locks or the machine sleeps (Windows) |
+| `lockOnSystemLock` | `true` | Lock when the session locks or the machine sleeps (Windows, macOS) |
 | `clipboardClearSeconds` | `30` | `0` disables clearing |
 | `autotypeSequence` | `{USERNAME}{TAB}{PASSWORD}` | Tokens: `{USERNAME}` `{PASSWORD}` `{TOTP}` `{TAB}` `{ENTER}` `{DELAY:ms}`. Without a username, the following `{TAB}` is skipped |
 | `copyTotpAfterFill` | `true` | Copy the one-time code after auto-type, ready to paste on the next screen |
@@ -157,7 +157,7 @@ vaultbar shortcut     Linux/GNOME: bind the hotkey through GNOME settings
   `.internal`, `.corp`, names without a dot) are never sent to the icon service.
 - Names, usernames and websites are decrypted for search. **Passwords, codes, notes and hidden fields stay encrypted in
   memory** until you copy, fill or reveal them. Locking zeroes the keys.
-- Locks on idle timeout, `vaultbar lock`, Ctrl+L, the tray menu, and (Windows) on session lock or sleep.
+- Locks on idle timeout, `vaultbar lock`, Ctrl+L, the tray menu, and (Windows, macOS) on session lock or sleep.
 - Re-prompt items require Windows Hello or the master password again. A password only counts if it unwraps the key the
   vault is unlocked with.
 - **Windows Hello:** after the first master-password unlock Vaultbar creates its own Windows Hello key. Its signature
@@ -182,7 +182,8 @@ vaultbar shortcut     Linux/GNOME: bind the hotkey through GNOME settings
 - Organisation items are supported but have not been tested against a real organisation vault.
 - Archived and deleted items are not shown.
 - Windows: auto-type cannot type into apps running as administrator unless Vaultbar does too (UIPI).
-- macOS build: compiled and code-reviewed, but not yet run on a Mac.
+- macOS: tested on Apple Silicon with a synthetic vault. Typing into another app, the physical hotkey press, a real click on the menu bar icon and a real screen lock still need a manual check (VBR-7).
+- macOS: another app using the same hotkey is not detected; the system lets both register it.
 
 ## Build and test
 
@@ -199,10 +200,12 @@ Pushing a `v*` tag builds all platforms on GitHub Actions and publishes them as 
 dotnet test                       # unit + vault round-trip tests
 ./tests/e2e-linux/run.ps1         # Linux/X11 end-to-end in an Ubuntu container (hotkey, unlock, auto-type, copy, CLI)
 docker run --rm -v ${PWD}:/w ubuntu:24.04 bash /w/tests/install-test.sh   # installer install/update/uninstall (after ./build.ps1)
+tests/e2e-macos/run.sh            # macOS end-to-end on the real backend: focus, keys, copy, locking, tray (no Accessibility needed)
+tests/install-test-macos.sh dist/vaultbar-osx-arm64.tar.gz   # macOS installer install/update/uninstall (after ./build.ps1)
 ```
 
 The tests build a synthetic, Bitwarden-shaped encrypted vault (`tests/Vaultbar.Tests/VaultFixture.cs`). They never touch
-a real one.
+a real one, and the macOS scripts run in a throwaway `HOME`.
 
 ## License
 

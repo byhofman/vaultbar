@@ -7,20 +7,22 @@ using Avalonia.Controls;
 namespace Vaultbar.Platform;
 
 [SupportedOSPlatform("macos")]
-internal sealed class MacPlatform : IPlatform
+internal sealed class MacPlatform(string? pasteboardName = null, string lockNotification = "com.apple.screenIsLocked") : IPlatform
 {
     private static Action? s_onHotkey;
+    private static Action? s_onLock;
     private nint _hotkeyRef;
     private nint _lastTarget;
 
-    private static readonly Dictionary<string, uint> KeyCodes = new()
+    internal static readonly Dictionary<string, uint> KeyCodes = new()
     {
         ["A"] = 0, ["S"] = 1, ["D"] = 2, ["F"] = 3, ["H"] = 4, ["G"] = 5, ["Z"] = 6, ["X"] = 7, ["C"] = 8, ["V"] = 9,
         ["B"] = 11, ["Q"] = 12, ["W"] = 13, ["E"] = 14, ["R"] = 15, ["Y"] = 16, ["T"] = 17, ["1"] = 18, ["2"] = 19,
         ["3"] = 20, ["4"] = 21, ["6"] = 22, ["5"] = 23, ["9"] = 25, ["7"] = 26, ["8"] = 28, ["0"] = 29, ["O"] = 31,
         ["U"] = 32, ["I"] = 34, ["P"] = 35, ["L"] = 37, ["J"] = 38, ["K"] = 40, ["N"] = 45, ["M"] = 46, ["Space"] = 49,
         ["F1"] = 122, ["F2"] = 120, ["F3"] = 99, ["F4"] = 118, ["F5"] = 96, ["F6"] = 97, ["F7"] = 98, ["F8"] = 100,
-        ["F9"] = 101, ["F10"] = 109, ["F11"] = 103, ["F12"] = 111,
+        ["F9"] = 101, ["F10"] = 109, ["F11"] = 103, ["F12"] = 111, ["F13"] = 105, ["F14"] = 107, ["F15"] = 113, ["F16"] = 106,
+        ["F17"] = 64, ["F18"] = 79, ["F19"] = 80, ["F20"] = 90,
     };
 
     public unsafe string? StartHotkey(Hotkey hk, Action onPressed)
@@ -72,23 +74,43 @@ internal sealed class MacPlatform : IPlatform
 
     public void AttachWindow(Window window)
     {
+        // Without these the bar drags the user to the Space it last opened on, and cannot appear over a full-screen app.
+        const nint moveToActiveSpace = 1 << 1, fullScreenAuxiliary = 1 << 8;
+        if (NsWindow(window) is var nsWindow and not 0)
+            ObjC.Send(nsWindow, ObjC.Sel("setCollectionBehavior:"), moveToActiveSpace | fullScreenAuxiliary);
+    }
+
+    private static nint NsWindow(Window window)
+    {
+        if (window.TryGetPlatformHandle() is not { Handle: not 0 } handle) return 0;
+        return handle.HandleDescriptor == "NSWindow" ? handle.Handle : ObjC.Send(handle.Handle, ObjC.Sel("window"));
     }
 
     public void ExcludeFromCapture(Window window)
     {
-        if (window.TryGetPlatformHandle() is not { Handle: not 0 } handle) return;
-        var nsWindow = handle.HandleDescriptor == "NSWindow" ? handle.Handle : ObjC.Send(handle.Handle, ObjC.Sel("window"));
-        if (nsWindow != 0) ObjC.Send(nsWindow, ObjC.Sel("setSharingType:"), 0);
+        if (NsWindow(window) is var nsWindow and not 0) ObjC.Send(nsWindow, ObjC.Sel("setSharingType:"), 0);
     }
 
     public void AfterShow()
     {
         var nsApp = ObjC.Send(ObjC.Class("NSApplication"), ObjC.Sel("sharedApplication"));
+        ObjC.Send(nsApp, ObjC.Sel("unhideWithoutActivation"));
         if (ObjC.SendBool(nsApp, ObjC.Sel("respondsToSelector:"), ObjC.Sel("activate")))
             ObjC.Send(nsApp, ObjC.Sel("activate"));
         else
             ObjC.Send(nsApp, ObjC.Sel("activateIgnoringOtherApps:"), 1);
     }
+
+    public void AfterStart(bool shown)
+    {
+        // Avalonia activates the app when it finishes launching, which would take focus at every login.
+        if (!shown) HideApp();
+    }
+
+    // An accessory app keeps activation after its last window closes, so without this nothing has focus.
+    public void AfterHide() => HideApp();
+
+    private static void HideApp() => ObjC.Send(ObjC.Send(ObjC.Class("NSApplication"), ObjC.Sel("sharedApplication")), ObjC.Sel("hide:"), 0);
 
     public string? AutoTypeUnavailableReason(ForeignWindow? target)
     {
@@ -150,7 +172,7 @@ internal sealed class MacPlatform : IPlatform
 
     public Task<object?> SetClipboardAsync(string text)
     {
-        var pb = ObjC.Send(ObjC.Class("NSPasteboard"), ObjC.Sel("generalPasteboard"));
+        var pb = Pasteboard();
         ObjC.SendLong(pb, ObjC.Sel("clearContents"));
         ObjC.Send(pb, ObjC.Sel("setString:forType:"), ObjC.NSString(text), ObjC.NSString("public.utf8-plain-text"));
         ObjC.Send(pb, ObjC.Sel("setString:forType:"), ObjC.NSString(""), ObjC.NSString("org.nspasteboard.ConcealedType"));
@@ -159,11 +181,15 @@ internal sealed class MacPlatform : IPlatform
 
     public Task ClearClipboardAsync(object token)
     {
-        var pb = ObjC.Send(ObjC.Class("NSPasteboard"), ObjC.Sel("generalPasteboard"));
+        var pb = Pasteboard();
         if (token is long count && ObjC.SendLong(pb, ObjC.Sel("changeCount")) == count)
             ObjC.SendLong(pb, ObjC.Sel("clearContents"));
         return Task.CompletedTask;
     }
+
+    private nint Pasteboard() => pasteboardName is null
+        ? ObjC.Send(ObjC.Class("NSPasteboard"), ObjC.Sel("generalPasteboard"))
+        : ObjC.Send(ObjC.Class("NSPasteboard"), ObjC.Sel("pasteboardWithName:"), ObjC.NSString(pasteboardName));
 
     public void OpenUrl(string url)
     {
@@ -172,12 +198,42 @@ internal sealed class MacPlatform : IPlatform
         Process.Start(psi)?.Dispose();
     }
 
-    public void WatchSystemLock(Action onLock)
+    public unsafe void WatchSystemLock(Action onLock)
     {
+        s_onLock = onLock;
+        var cls = ObjC.objc_allocateClassPair(ObjC.Class("NSObject"), "VaultbarLockObserver", 0);
+        var selector = ObjC.Sel("systemLocked:");
+        ObjC.class_addMethod(cls, selector, (nint)(delegate* unmanaged<nint, nint, nint, void>)&OnSystemLock, "v@:@");
+        ObjC.objc_registerClassPair(cls);
+        var observer = ObjC.Send(ObjC.Send(cls, ObjC.Sel("alloc")), ObjC.Sel("init"));
+
+        // NSApplication suspends distributed notifications while inactive, which is nearly always for this app,
+        // so a screen lock would otherwise only arrive the next time the bar opens.
+        const nint deliverImmediately = 4;
+        ObjC.Observe(ObjC.Send(ObjC.Class("NSDistributedNotificationCenter"), ObjC.Sel("defaultCenter")),
+            ObjC.Sel("addObserver:selector:name:object:suspensionBehavior:"), observer, selector, ObjC.NSString(lockNotification), 0, deliverImmediately);
+
+        var workspaceCenter = ObjC.Send(ObjC.Send(ObjC.Class("NSWorkspace"), ObjC.Sel("sharedWorkspace")), ObjC.Sel("notificationCenter"));
+        foreach (var name in new[] { "NSWorkspaceWillSleepNotification", "NSWorkspaceSessionDidResignActiveNotification" })
+            ObjC.Observe(workspaceCenter, ObjC.Sel("addObserver:selector:name:object:"), observer, selector, ObjC.NSString(name), 0);
+    }
+
+    [UnmanagedCallersOnly]
+    private static void OnSystemLock(nint self, nint selector, nint notification)
+    {
+        try
+        {
+            s_onLock?.Invoke();
+        }
+        catch (Exception ex)
+        {
+            Log.Write($"system lock: {ex}");
+        }
     }
 
     public void Dispose()
     {
+        s_onLock = null;
         if (_hotkeyRef != 0) Carbon.UnregisterEventHotKey(_hotkeyRef);
     }
 
@@ -205,7 +261,7 @@ internal sealed class MacPlatform : IPlatform
         [DllImport(Lib)] public static extern int UnregisterEventHotKey(nint hotKey);
     }
 
-    private static class ObjC
+    internal static class ObjC
     {
         private const string Lib = "/usr/lib/libobjc.A.dylib";
 
@@ -218,6 +274,12 @@ internal sealed class MacPlatform : IPlatform
         [DllImport(Lib, EntryPoint = "objc_msgSend")] public static extern long SendLong(nint receiver, nint selector);
         [DllImport(Lib, EntryPoint = "objc_msgSend")] private static extern byte SendByte(nint receiver, nint selector, nint arg);
         [DllImport(Lib, EntryPoint = "objc_msgSend")] private static extern nint SendUtf8(nint receiver, nint selector, [MarshalAs(UnmanagedType.LPUTF8Str)] string arg);
+
+        [DllImport(Lib, EntryPoint = "objc_msgSend")] public static extern void Observe(nint center, nint selector, nint observer, nint action, nint name, nint obj);
+        [DllImport(Lib, EntryPoint = "objc_msgSend")] public static extern void Observe(nint center, nint selector, nint observer, nint action, nint name, nint obj, nint behavior);
+        [DllImport(Lib)] public static extern nint objc_allocateClassPair(nint superclass, [MarshalAs(UnmanagedType.LPStr)] string name, nint extraBytes);
+        [DllImport(Lib)] public static extern void objc_registerClassPair(nint cls);
+        [DllImport(Lib)] public static extern byte class_addMethod(nint cls, nint selector, nint implementation, [MarshalAs(UnmanagedType.LPStr)] string types);
 
         public static bool SendBool(nint receiver, nint selector, nint arg) => SendByte(receiver, selector, arg) != 0;
 

@@ -110,6 +110,7 @@ public partial class QuickWindow : Window
     public void Dismiss()
     {
         Hide();
+        _app.Platform.AfterHide();
         SearchBox.Text = "";
         PasswordBox.Text = "";
         CloseDetails();
