@@ -11,6 +11,93 @@ public sealed class VaultFixture
     private readonly SymmetricKey _userKey = SymmetricKey.FromBytes(RandomNumberGenerator.GetBytes(64));
     private readonly JsonObject _ciphers = new();
     private readonly JsonObject _folders = new();
+    private readonly JsonObject _orgKeys = new();
+    private readonly Dictionary<string, SymmetricKey> _orgs = new();
+    private readonly RSA _accountRsa = RSA.Create(2048);
+
+    /// <summary>Where the private key lives: the current account state, or the older flat key.</summary>
+    public bool LegacyPrivateKeySlot { get; set; }
+
+    /// <summary>Replaces the private key with a value that does not decrypt, to test a damaged account.</summary>
+    public string? PrivateKeyOverride { get; set; }
+
+    public string AddOrganization()
+    {
+        var orgId = Guid.NewGuid().ToString();
+        var raw = RandomNumberGenerator.GetBytes(64);
+        _orgs[orgId] = SymmetricKey.FromBytes(raw);
+        _orgKeys[orgId] = new JsonObject { ["type"] = "organization", ["key"] = WrapForAccount(raw) };
+        return orgId;
+    }
+
+    /// <summary>The older store shape: the organisation key as a bare string.</summary>
+    public string AddOrganizationBareKey()
+    {
+        var orgId = AddOrganization();
+        _orgKeys[orgId] = _orgKeys[orgId]!["key"]!.GetValue<string>();
+        return orgId;
+    }
+
+    /// <summary>A provider-managed organisation: its key is wrapped with a provider key Vaultbar does not read.</summary>
+    public string AddProviderOrganization()
+    {
+        var orgId = Guid.NewGuid().ToString();
+        using var providerKey = SymmetricKey.FromBytes(RandomNumberGenerator.GetBytes(64));
+        var raw = RandomNumberGenerator.GetBytes(64);
+        _orgs[orgId] = SymmetricKey.FromBytes(raw);
+        _orgKeys[orgId] = new JsonObject { ["type"] = "provider", ["key"] = EncString.Encrypt(raw, providerKey), ["providerId"] = Guid.NewGuid().ToString() };
+        return orgId;
+    }
+
+    /// <summary>A key this account cannot open, as after a membership was re-keyed for another device's key.</summary>
+    public string AddOrganizationWrappedForSomeoneElse()
+    {
+        var orgId = Guid.NewGuid().ToString();
+        using var other = RSA.Create(2048);
+        var raw = RandomNumberGenerator.GetBytes(64);
+        _orgs[orgId] = SymmetricKey.FromBytes(raw);
+        _orgKeys[orgId] = new JsonObject { ["type"] = "organization", ["key"] = $"4.{Convert.ToBase64String(other.Encrypt(raw, RSAEncryptionPadding.OaepSHA1))}" };
+        return orgId;
+    }
+
+    public string AddOrgLogin(string orgId, string name, string username, string password, bool itemKey = false, bool reprompt = false)
+    {
+        var id = AddCipher(_orgs[orgId], name, username, password, itemKey, reprompt);
+        _ciphers[id]!["organizationId"] = orgId;
+        return id;
+    }
+
+    private string WrapForAccount(byte[] raw) => $"4.{Convert.ToBase64String(_accountRsa.Encrypt(raw, RSAEncryptionPadding.OaepSHA1))}";
+
+    private string AddCipher(SymmetricKey baseKey, string name, string username, string password, bool itemKey, bool reprompt)
+    {
+        var id = Guid.NewGuid().ToString();
+        var key = baseKey;
+        string? encItemKey = null;
+        if (itemKey)
+        {
+            var raw = RandomNumberGenerator.GetBytes(64);
+            encItemKey = EncString.Encrypt(raw, baseKey);
+            key = SymmetricKey.FromBytes(raw);
+        }
+        _ciphers[id] = new JsonObject
+        {
+            ["id"] = id,
+            ["type"] = 1,
+            ["name"] = Enc(name, key),
+            ["favorite"] = false,
+            ["reprompt"] = reprompt ? 1 : 0,
+            ["key"] = encItemKey,
+            ["deletedDate"] = null,
+            ["login"] = new JsonObject
+            {
+                ["username"] = Enc(username, key),
+                ["password"] = Enc(password, key),
+                ["uris"] = new JsonArray(),
+            },
+        };
+        return id;
+    }
 
     public string AddFolder(string name)
     {
@@ -121,6 +208,13 @@ public sealed class VaultFixture
             [$"user_{uid}_sync_lastSync"] = DateTimeOffset.UtcNow.AddMinutes(-3).ToString("O"),
             [$"user_{uid}_vaultTimeoutSettings_vaultTimeout"] = 15,
         };
+        if (_orgKeys.Count > 0)
+        {
+            var privateKey = PrivateKeyOverride ?? EncString.Encrypt(_accountRsa.ExportPkcs8PrivateKey(), _userKey);
+            root[$"user_{uid}_crypto_organizationKeys"] = _orgKeys.DeepClone();
+            if (LegacyPrivateKeySlot) root[$"user_{uid}_crypto_privateKey"] = privateKey;
+            else root[$"user_{uid}_crypto_accountCryptographicState"] = new JsonObject { ["V1"] = new JsonObject { ["private_key"] = privateKey } };
+        }
         Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath(path))!);
         File.WriteAllText(path, root.ToJsonString());
     }

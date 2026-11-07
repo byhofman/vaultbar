@@ -6,7 +6,7 @@ IDs are permanent: never renumber or reuse one.
 ## Next
 
 - [x] VBR-1 Run the macOS build on a real Mac; so far it is compiled and code-reviewed only
-- [ ] VBR-2 Test organisation items against a real organisation vault
+- [ ] VBR-2 Test organisation items against a real organisation vault (synthetic vault and SDK vectors covered; the real vault is a manual check)
 - [ ] VBR-3 Touch ID unlock on macOS
 - [ ] VBR-4 Read the newer "v2" (COSE) key format
 - [ ] VBR-7 Manual macOS check with Accessibility granted and a real vault: auto-type into another app, physical hotkey, tray click, screen lock and sleep
