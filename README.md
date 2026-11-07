@@ -78,6 +78,10 @@ curl -fsSL https://raw.githubusercontent.com/byhofman/vaultbar/main/install/inst
 
 Then press **Ctrl+Shift+Space** (macOS: **⌘⇧Space**).
 
+**macOS disk image:** each release also has `vaultbar-osx-arm64.dmg` (Apple Silicon) and `vaultbar-osx-x64.dmg` (Intel).
+Drag Vaultbar to Applications. Until releases are signed with a Developer ID, a browser download needs **System Settings ›
+Privacy & Security › Open Anyway** once; the one-liner above does not.
+
 | | Windows | Linux | macOS |
 | --- | --- | --- | --- |
 | Installs to | `%LOCALAPPDATA%\Programs\Vaultbar\vaultbar.exe` | `~/.local/bin/vaultbar` | `/Applications/Vaultbar.app` (or `~/Applications`), CLI link in `~/.local/bin` |
@@ -101,7 +105,7 @@ Uninstalling leaves your settings folder (see Configuration) in place.
 
 **Options:** install a specific release with `-Version v0.1.0` (PowerShell) or `--version v0.1.0` (bash/zsh). To
 install from an archive you already downloaded, use `-Archive <file>` or `--archive <file>`. The archives are
-`vaultbar-<win|linux|osx>-<x64|arm64>.zip/.tar.gz` on the releases page. On macOS, `--dir <folder>` installs somewhere other than `/Applications`.
+`vaultbar-<win|linux|osx>-<x64|arm64>.zip/.tar.gz` on the releases page (plus the `.dmg` for macOS). On macOS, `--dir <folder>` installs somewhere other than `/Applications`.
 
 ### Platform notes
 
@@ -114,7 +118,7 @@ install from an archive you already downloaded, use `-Archive <file>` or `--arch
 - **Linux libraries:** Vaultbar needs the standard X11 client libraries (`libX11`, `libXtst`, `libICE`, `libSM`,
   `fontconfig`). Every desktop install has them, and the installer warns if one is missing.
 - **macOS:** for auto-type, allow Vaultbar under **System Settings › Privacy & Security › Accessibility**; it asks the
-  first time. Updating re-signs the app, which resets that permission.
+  first time. While releases are ad-hoc signed, updating resets that permission.
 
 ## Command line
 
@@ -199,7 +203,9 @@ Requires the .NET 10 SDK.
 ./build.ps1 -Runtime win-x64      # one platform
 ```
 
-Pushing a `v*` tag builds all platforms on GitHub Actions and publishes them as a release (`.github/workflows/release.yml`).
+macOS builds need a Mac, for the Touch ID library; `packaging/macos/package.sh` makes the dmg. Pushing a `v*` tag builds all
+platforms on GitHub Actions and publishes them as a release (`.github/workflows/release.yml`). With the `APPLE_*` repository
+secrets set, the release is signed and notarized.
 
 ```powershell
 dotnet test                       # unit + vault round-trip tests

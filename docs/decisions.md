@@ -2,6 +2,14 @@
 
 Non-obvious choices a reader could not predict from the code. Newest first.
 
+## D-6 The dmg ships ad-hoc signed until a Developer ID exists — 2026-11-07
+
+Same as Dockyard: a browser download needs Open Anyway once, and that beats no download for the website to link to. The
+signing and notarization steps are in `packaging/macos/package.sh` and switch on with the `APPLE_*` secrets, on tags only.
+They have never run, because no certificate exists yet; the entitlements are the standard .NET pair and may need
+adjusting on the first real run. The installer now keeps a Developer ID signature instead of re-signing ad hoc. The bundle
+identifier moved from `local.vaultbar` to `dev.byhofman.vaultbar` before anyone depends on the old one.
+
 ## D-5 v2 keys read both COSE ciphers and refuse every mismatch — 2026-11-07
 
 Bitwarden's SDK now has XAES-256-GCM next to XChaCha20-Poly1305 for type 7 EncStrings, so both are read: an account on the

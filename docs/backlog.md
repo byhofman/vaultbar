@@ -10,7 +10,7 @@ IDs are permanent: never renumber or reuse one.
 - [ ] VBR-3 Touch ID unlock on macOS (built; a real finger on the sensor is a manual check)
 - [x] VBR-4 Read the newer "v2" (COSE) key format
 - [ ] VBR-7 Manual macOS check with Accessibility granted and a real vault: auto-type into another app, physical hotkey, tray click, screen lock and sleep
-- [ ] VBR-8 Signed and notarized macOS dmg in the release, and a download page on the website
+- [ ] VBR-8 Signed and notarized macOS dmg in the release, and a download page on the website (dmg and signing steps built; needs the Apple credentials, and the website has no pages yet)
 
 ## Later
 
