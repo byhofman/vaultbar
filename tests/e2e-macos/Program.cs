@@ -441,9 +441,9 @@ internal static class Program
         Check("canceling Touch ID leaves the password box", await UntilAsync(() => Find<TextBox>("PasswordBox").IsVisible && Find<TextBox>("PasswordBox").IsFocused, 4000) && vault.State == VaultState.Locked);
         Check("canceling keeps the setup", vault.CanQuickUnlock);
         device.NextResult = 0;
-        N.Chord('h', N.Command);
-        Check("Cmd+H retries Touch ID", await UntilAsync(() => vault.State == VaultState.Unlocked, 4000));
-        Check("Cmd+H does not hide the bar", _window.IsVisible && N.AppIsActive);
+        N.Chord('r', N.Command);
+        Check("Cmd+R retries Touch ID", await UntilAsync(() => vault.State == VaultState.Unlocked, 4000));
+        Check("Cmd+R keeps the bar open", _window.IsVisible && N.AppIsActive);
         _window.Dismiss();
 
         await UnlockAgainAsync();

@@ -343,7 +343,7 @@ public partial class QuickWindow : Window
                     e.Handled = true;
                     _ = UnlockAsync();
                 }
-                else if (e.Key == Key.H && primary && _app.Vault.CanQuickUnlock)
+                else if (e.Key == QuickUnlockRetryKey && primary && _app.Vault.CanQuickUnlock)
                 {
                     e.Handled = true;
                     _ = QuickUnlockAsync();
@@ -714,6 +714,9 @@ public partial class QuickWindow : Window
         MessagePanel.IsVisible = false;
     }
 
+    // The macOS application menu takes Cmd+H for Hide before the window sees it.
+    private static Key QuickUnlockRetryKey => OperatingSystem.IsMacOS() ? Key.R : Key.H;
+
     private async Task QuickUnlockAsync()
     {
         if (_mode != Mode.Locked || _app.Vault.QuickUnlock is not { } provider) return;
@@ -875,7 +878,7 @@ public partial class QuickWindow : Window
         {
             case Mode.Locked:
                 hints.Add((["Enter"], "Unlock"));
-                if (_app.Vault.CanQuickUnlock) hints.Add(([mod, "H"], _app.Vault.QuickUnlock!.Name));
+                if (_app.Vault.CanQuickUnlock) hints.Add(([mod, QuickUnlockRetryKey.ToString()], _app.Vault.QuickUnlock!.Name));
                 hints.Add((["Esc"], "Close"));
                 break;
             case Mode.Help:
