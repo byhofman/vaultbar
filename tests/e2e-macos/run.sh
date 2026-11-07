@@ -4,6 +4,7 @@
 set -euo pipefail
 here=${0:A:h}
 dotnet build "$here/Vaultbar.MacE2E.csproj" -c Debug -m:2 --nologo -v q
+"$here/../../src/Vaultbar.TouchId/build.sh" "$(uname -m)" "$here/bin/Debug/net10.0"
 sandbox=$(mktemp -d)
 trap 'rm -rf "$sandbox"' EXIT
 out=${E2E_OUT:-$sandbox/shots}

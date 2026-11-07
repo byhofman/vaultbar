@@ -1,7 +1,8 @@
 # Builds self-contained vaultbar binaries (no .NET runtime or other dependencies needed on the target).
 # Usage: ./build.ps1 [-Runtime win-x64,linux-x64,...] [-Version 1.2.3]
+# macOS builds include a Swift library for Touch ID, so they only build on a Mac.
 param(
-    [string[]]$Runtime = @('win-x64', 'win-arm64', 'linux-x64', 'linux-arm64', 'osx-arm64', 'osx-x64'),
+    [string[]]$Runtime = @('win-x64', 'win-arm64', 'linux-x64', 'linux-arm64') + $(if ($IsMacOS) { @('osx-arm64', 'osx-x64') } else { @() }),
     [string]$Version
 )
 $ErrorActionPreference = 'Stop'
@@ -19,6 +20,8 @@ foreach ($rid in $Runtime) {
         $app = Join-Path $out 'Vaultbar.app'
         dotnet publish "$root/src/Vaultbar" -c Release -r $rid --self-contained -p:PublishSingleFile=false -o "$app/Contents/MacOS" -p:Version=$Version -v q --nologo
         if ($LASTEXITCODE) { throw "publish $rid failed" }
+        & "$root/src/Vaultbar.TouchId/build.sh" ($rid -eq 'osx-arm64' ? 'arm64' : 'x86_64') "$app/Contents/MacOS"
+        if ($LASTEXITCODE) { throw "Touch ID library for $rid failed" }
         @"
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">

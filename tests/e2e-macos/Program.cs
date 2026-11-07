@@ -13,6 +13,10 @@ namespace Vaultbar.MacE2E;
 internal sealed class RecordingPlatform(MacPlatform mac) : IPlatform
 {
     public readonly List<string> Opened = [];
+    public readonly FakeTouchIdDevice TouchIdDevice = new();
+    public IQuickUnlockProvider? QuickUnlock { get; private set; }
+
+    public void UseFakeTouchId(string keyPath) => QuickUnlock = new MacTouchId(TouchIdDevice, keyPath);
 
     public string? StartHotkey(Hotkey hotkey, Action onPressed) => mac.StartHotkey(hotkey, onPressed);
     public ForeignWindow? CaptureForeground() => mac.CaptureForeground();
@@ -32,6 +36,28 @@ internal sealed class RecordingPlatform(MacPlatform mac) : IPlatform
     public void OpenUrl(string url) => Opened.Add(url);
     public void WatchSystemLock(Action onLock) => mac.WatchSystemLock(onLock);
     public void Dispose() => mac.Dispose();
+}
+
+/// <summary>Stands in for the Secure Enclave and the finger, so the full unlock flow runs with no system dialog.</summary>
+internal sealed class FakeTouchIdDevice : ITouchIdDevice
+{
+    public int NextResult;
+    public int Prompts;
+
+    public bool Available => true;
+
+    public int Create(out byte[] blob)
+    {
+        blob = System.Security.Cryptography.RandomNumberGenerator.GetBytes(32);
+        return 0;
+    }
+
+    public int Derive(byte[] blob, byte[] challenge, string reason, out byte[] secret)
+    {
+        Prompts++;
+        secret = NextResult == 0 ? System.Security.Cryptography.HMACSHA256.HashData(blob, challenge) : [];
+        return NextResult;
+    }
 }
 
 internal static class Program
@@ -66,6 +92,8 @@ internal static class Program
         _shots = Environment.GetEnvironmentVariable("E2E_OUT") ?? sandbox;
         _vaultPath = Path.Combine(sandbox, "fake-vault", "data.json");
         _fixture.Write(_vaultPath, Password);
+        Platform.UseFakeTouchId(Path.Combine(Paths.CacheDir, "touch-id-key.dat"));
+        new QuickUnlockStore(Path.Combine(Paths.CacheDir, "quick-unlock.dat")).SaveDeclined(VaultFixture.UserId);
         Directory.CreateDirectory(Paths.ConfigDir);
         File.WriteAllText(Config.FilePath, $$"""
             { "dataPath": "{{_vaultPath}}", "showFavicons": false, "clipboardClearSeconds": 2, "hideAfterCopy": false, "lockAfterMinutes": 1 }
@@ -134,6 +162,8 @@ internal static class Program
             await VaultChangeAsync();
             await LockingAsync();
             await TrayAsync();
+            await TouchIdFlowAsync();
+            RealEnclaveGate();
             await QuitAsync();
         }
         catch (Exception ex)
@@ -317,6 +347,8 @@ internal static class Program
     {
         _fixture.AddLogin("Added by desktop sync", "new-user", "new-pass");
         _fixture.Write(_vaultPath, Password);
+        Platform.UseFakeTouchId(Path.Combine(Paths.CacheDir, "touch-id-key.dat"));
+        new QuickUnlockStore(Path.Combine(Paths.CacheDir, "quick-unlock.dat")).SaveDeclined(VaultFixture.UserId);
         Check("a rewritten data.json is picked up", await UntilAsync(() => Controller.Vault.Items.Any(i => i.Name == "Added by desktop sync"), 6000));
     }
 
@@ -380,6 +412,66 @@ internal static class Program
         N.Chord('q', N.Command);
         await Task.Delay(3000);
         Check("Cmd+Q quits with the copied secret cleared", false, "app is still running");
+    }
+
+    private static async Task TouchIdFlowAsync()
+    {
+        var vault = Controller.Vault;
+        var device = Platform.TouchIdDevice;
+        var tray = TrayIcon.GetIcons(Application.Current!)![0];
+        var items = tray.Menu!.Items.OfType<NativeMenuItem>().ToList();
+        var toggle = items.FirstOrDefault(i => i.Header == "Unlock with Touch ID");
+        Check("tray offers Touch ID, off while declined", toggle is { IsChecked: false }, string.Join(" | ", items.Select(i => i.Header)));
+        if (toggle is null) return;
+
+        await UnlockAgainAsync();
+        var prompts = device.Prompts;
+        ClickTray(items, "Unlock with Touch ID");
+        Check("turning it on from the tray asks once and sets it up", await UntilAsync(() => vault.CanQuickUnlock) && device.Prompts == prompts + 1, $"prompts={device.Prompts - prompts}");
+
+        vault.Lock();
+        Reopen();
+        Check("opening a locked bar asks for Touch ID and unlocks", await UntilAsync(() => vault.State == VaultState.Unlocked, 4000));
+        Check("the bar stays open with the search box focused", await UntilAsync(() => _window.IsVisible && Find<TextBox>("SearchBox").IsFocused));
+        _window.Dismiss();
+
+        vault.Lock();
+        device.NextResult = -2;
+        Reopen();
+        Check("canceling Touch ID leaves the password box", await UntilAsync(() => Find<TextBox>("PasswordBox").IsVisible && Find<TextBox>("PasswordBox").IsFocused, 4000) && vault.State == VaultState.Locked);
+        Check("canceling keeps the setup", vault.CanQuickUnlock);
+        device.NextResult = 0;
+        N.Chord('r', N.Command);
+        Check("Cmd+R retries Touch ID", await UntilAsync(() => vault.State == VaultState.Unlocked, 4000));
+        Check("Cmd+R keeps the bar open", _window.IsVisible && N.AppIsActive);
+        _window.Dismiss();
+
+        await UnlockAgainAsync();
+        ClickTray(items, "Unlock with Touch ID");
+        Check("turning it off forgets the setup", await UntilAsync(() => vault.QuickUnlockSetting == QuickUnlockSetting.Off));
+    }
+
+    /// <summary>The only step that uses the real enclave. It never prompts: creating a key asks nothing, and using it is refused without a finger.</summary>
+    private static void RealEnclaveGate()
+    {
+        var native = new NativeTouchId();
+        if (!native.Available)
+        {
+            Console.WriteLine("SKIP  real enclave: no Secure Enclave or no enrolled finger here");
+            return;
+        }
+
+        var created = native.Create(out var blob);
+        if (created == -25308)
+        {
+            Console.WriteLine("SKIP  real enclave: the screen is locked");
+            return;
+        }
+
+        Check("the Secure Enclave creates a key for this ad-hoc build", created == 0, $"status={created}");
+        if (created != 0) return;
+        var refused = NativeTouchId.Derive(blob, new byte[32], "e2e", prompt: false, out var secret);
+        Check("the enclave refuses that key without Touch ID", refused != 0 && secret.Length == 0, $"status={refused}");
     }
 
     private static void Finish()

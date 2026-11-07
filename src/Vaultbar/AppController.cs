@@ -22,7 +22,7 @@ public sealed class AppController
         Config = Config.Load();
         Vault = new VaultService(Config);
         Platform = platform;
-        if (Config.WindowsHello) Vault.QuickUnlock = Platform.QuickUnlock;
+        if (OperatingSystem.IsMacOS() ? Config.TouchId : Config.WindowsHello) Vault.QuickUnlock = Platform.QuickUnlock;
         Usage = new UsageStore();
         Icons = new FaviconService();
     }

@@ -2,6 +2,15 @@
 
 Non-obvious choices a reader could not predict from the code. Newest first.
 
+## D-4 Touch ID uses a Secure Enclave key blob through a Swift library — 2026-11-07
+
+The data-protection keychain needs an entitlement an ad-hoc signed app cannot hold (and a provisioning profile), and the
+file-based keychain would gate the key only by a dialog and ask again after every update re-signs the app. CryptoKit's
+Secure Enclave keys avoid both: the key blob can sit in a file because it only works inside this Mac's enclave, and it
+survives re-signing. CryptoKit has no C API, so `src/Vaultbar.TouchId` is a small Swift library and macOS builds moved to
+the macOS CI job. The key agreement output is deterministic, which fits the same `IQuickUnlockProvider` Windows Hello uses.
+Only codes that mean the key is gone forget the enrollment: a closed lid or a canceled prompt must not.
+
 ## D-3 A damaged account private key does not stop the unlock — 2026-11-07
 
 Organisation keys are unwrapped with the account's RSA private key. If that key does not decrypt, the personal vault

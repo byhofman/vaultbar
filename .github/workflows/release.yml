@@ -25,11 +25,19 @@ jobs:
       - name: End to end
         run: tests/e2e-macos/run.sh
 
-      - name: Installer
+      - name: Build
         shell: pwsh
         run: |
-          ./build.ps1 -Runtime osx-arm64 -Version 0.0.0
-          tests/install-test-macos.sh dist/vaultbar-osx-arm64.tar.gz
+          $version = if ($env:GITHUB_REF_TYPE -eq 'tag') { $env:GITHUB_REF_NAME.TrimStart('v') } else { '0.0.0' }
+          ./build.ps1 -Runtime osx-arm64,osx-x64 -Version $version
+
+      - name: Installer
+        run: tests/install-test-macos.sh dist/vaultbar-osx-arm64.tar.gz
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: vaultbar-macos
+          path: dist/*.tar.gz
 
   build:
     runs-on: ubuntu-latest
@@ -51,13 +59,22 @@ jobs:
 
       - uses: actions/upload-artifact@v4
         with:
-          name: vaultbar
+          name: vaultbar-windows-linux
           path: |
             dist/*.zip
             dist/*.tar.gz
 
+  release:
+    if: github.ref_type == 'tag'
+    needs: [macos, build]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+
       - name: Release
-        if: github.ref_type == 'tag'
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release create "$GITHUB_REF_NAME" dist/*.zip dist/*.tar.gz --title "$GITHUB_REF_NAME" --generate-notes
+        run: gh release create "$GITHUB_REF_NAME" dist/*.zip dist/*.tar.gz --repo "$GITHUB_REPOSITORY" --title "$GITHUB_REF_NAME" --generate-notes

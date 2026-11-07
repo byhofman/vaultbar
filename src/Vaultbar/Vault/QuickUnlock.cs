@@ -143,7 +143,20 @@ public sealed class QuickUnlockStore(string path)
         if (OperatingSystem.IsWindows()) bytes = ProtectedData.Protect(bytes, Info, DataProtectionScope.CurrentUser);
         Directory.CreateDirectory(Path.GetDirectoryName(path)!);
         var temp = path + ".tmp";
-        File.WriteAllBytes(temp, bytes);
+        if (OperatingSystem.IsWindows())
+        {
+            File.WriteAllBytes(temp, bytes);
+        }
+        else
+        {
+            using var stream = new FileStream(temp, new FileStreamOptions
+            {
+                Mode = FileMode.Create,
+                Access = FileAccess.Write,
+                UnixCreateMode = UnixFileMode.UserRead | UnixFileMode.UserWrite,
+            });
+            stream.Write(bytes);
+        }
         File.Move(temp, path, overwrite: true);
     }
 }

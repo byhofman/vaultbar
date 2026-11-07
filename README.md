@@ -23,7 +23,7 @@ without leaving the app you are in.
 | Ctrl+C / Ctrl+Shift+C / Ctrl+Alt+C copy password / username / code | Same (macOS ⌘C / ⌘⇧C / ⌘⌥C). Bitwarden's Ctrl+P / Ctrl+U / Ctrl+T also work |
 | → shows item details | Tab or → |
 | Clipboard cleared after use | After 30 s and on lock, only if it still holds what Vaultbar put there; hidden from Windows clipboard history/cloud, macOS concealed type, KDE password hint |
-| Unlock with Windows Hello / Touch ID | Windows Hello on Windows; master password on Linux and macOS |
+| Unlock with Windows Hello / Touch ID | Windows Hello on Windows, Touch ID on macOS; master password on Linux |
 
 ## Keys
 
@@ -45,8 +45,8 @@ without leaving the app you are in.
 | Ctrl+L | lock | lock |
 | F1 / Ctrl+/ | keyboard shortcuts | keyboard shortcuts |
 
-On macOS use ⌘ instead of Ctrl, and ⌥ for Alt. Items with **master password re-prompt** ask for Windows Hello (or the
-master password) once per opening. On the unlock screen, Ctrl+H retries Windows Hello.
+On macOS use ⌘ instead of Ctrl, and ⌥ for Alt. Items with **master password re-prompt** ask for Windows Hello or Touch ID (or the
+master password) once per opening. On the unlock screen, Ctrl+H (macOS ⌘R) retries Windows Hello or Touch ID.
 
 ![Item details](docs/details.png)
 
@@ -145,6 +145,7 @@ vaultbar shortcut     Linux/GNOME: bind the hotkey through GNOME settings
 | `dataPath` | `null` | Path to the desktop app's `data.json` if it is not in the standard place |
 | `hideFromScreenCapture` | `true` | Keep the search bar out of screenshots, recordings and screen sharing (Windows, macOS) |
 | `windowsHello` | `true` | Offer Windows Hello unlock after a master-password unlock. Turn it on or off later from the tray menu |
+| `touchId` | `true` | The same for Touch ID on macOS |
 
 ## How it works and security
 
@@ -158,12 +159,16 @@ vaultbar shortcut     Linux/GNOME: bind the hotkey through GNOME settings
 - Names, usernames and websites are decrypted for search. **Passwords, codes, notes and hidden fields stay encrypted in
   memory** until you copy, fill or reveal them. Locking zeroes the keys.
 - Locks on idle timeout, `vaultbar lock`, Ctrl+L, the tray menu, and (Windows, macOS) on session lock or sleep.
-- Re-prompt items require Windows Hello or the master password again. A password only counts if it unwraps the key the
+- Re-prompt items require Windows Hello, Touch ID or the master password again. A password only counts if it unwraps the key the
   vault is unlocked with.
 - **Windows Hello:** after the first master-password unlock Vaultbar creates its own Windows Hello key. Its signature
   over a random challenge derives the AES-256-GCM key that encrypts the vault's user key on disk
   (`%LOCALAPPDATA%\vaultbar\quick-unlock.dat`, wrapped once more with DPAPI). Unlocking needs your face, fingerprint or
   PIN; if the stored key no longer matches the vault, Vaultbar deletes it and asks for the master password.
+- **Touch ID:** after the first master-password unlock Vaultbar creates a key in the Secure Enclave that only works after
+  Touch ID for the fingers enrolled at that moment. A key agreement with it derives the AES-256-GCM key that encrypts the
+  vault's user key on disk (`~/Library/Caches/vaultbar`, readable only by you). No Keychain item is created. Adding or
+  removing a finger voids the key, and Vaultbar then asks for the master password and offers to set it up again.
 - Copied secrets are also cleared when Vaultbar locks or crashes. The search bar is hidden from screen capture.
 - Opening a website only ever opens `http`/`https` addresses. Auto-type never types into the taskbar, desktop or Start.
 - The KDF settings in `data.json` are checked against Bitwarden's own bounds before they are used.
@@ -174,8 +179,8 @@ vaultbar shortcut     Linux/GNOME: bind the hotkey through GNOME settings
 ## Limitations
 
 - **Requires the Bitwarden desktop app.** Changes made in the browser extension show up once the desktop app has synced.
-- **No Touch ID or Linux biometrics yet.** Windows has its own Windows Hello unlock (see above); the desktop app's
-  biometric unlock is bound to that app and cannot be shared.
+- **No Linux biometrics yet.** Windows Hello and Touch ID are Vaultbar's own (see above); the desktop app's biometric
+  unlock is bound to that app and cannot be shared.
 - Screen-capture hiding is not available on Linux.
 - Accounts without a master password (SSO with trusted devices or key connector) are not supported. Neither is the
   newer "v2" (COSE) key format; Vaultbar says so instead of failing silently.
