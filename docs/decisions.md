@@ -2,6 +2,15 @@
 
 Non-obvious choices a reader could not predict from the code. Newest first.
 
+## D-5 v2 keys read both COSE ciphers and refuse every mismatch — 2026-11-07
+
+Bitwarden's SDK now has XAES-256-GCM next to XChaCha20-Poly1305 for type 7 EncStrings, so both are read: an account on the
+newer one would otherwise be locked out with no warning. As in the SDK, the key's algorithm and key ID must match the
+message, and a content type it does not know is refused. A type 0 EncString is now only accepted by a key without a MAC,
+also as in the SDK: otherwise anyone able to edit `data.json` could strip the MAC from a value. .NET has no extended-nonce
+ChaCha20, so HChaCha20 is implemented here and checked against the draft's test vector. CBOR uses Microsoft's
+`System.Formats.Cbor`.
+
 ## D-4 Touch ID uses a Secure Enclave key blob through a Swift library — 2026-11-07
 
 The data-protection keychain needs an entitlement an ad-hoc signed app cannot hold (and a provisioning profile), and the

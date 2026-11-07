@@ -14,6 +14,7 @@
 
   <ItemGroup>
     <Compile Include="..\Vaultbar.Tests\VaultFixture.cs" Link="VaultFixture.cs" />
+    <Compile Include="..\Vaultbar.Tests\CoseWriter.cs" Link="CoseWriter.cs" />
     <ProjectReference Include="..\..\src\Vaultbar\Vaultbar.csproj" />
   </ItemGroup>
 

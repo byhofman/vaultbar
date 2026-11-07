@@ -152,7 +152,8 @@ vaultbar shortcut     Linux/GNOME: bind the hotkey through GNOME settings
 - The Bitwarden desktop app keeps your vault on disk **encrypted** (`data.json` in its app-data folder; snap, flatpak
   and Mac App Store locations are detected too). Vaultbar derives your master key from your master password with the
   account's KDF (PBKDF2-SHA256 or Argon2id). It then unwraps the user key (HKDF-stretched master key, AES-256-CBC +
-  HMAC-SHA256) and decrypts organisation and per-item keys. This is the same scheme the official clients use.
+  HMAC-SHA256) and decrypts organisation and per-item keys. Accounts on Bitwarden's newer "v2" format (COSE keys with
+  XChaCha20-Poly1305 or XAES-256-GCM) work too. This is the same scheme the official clients use.
 - It never talks to the Bitwarden server and never writes to the vault. The only network traffic is favicons, which you
   can turn off. Host names that only exist on a local network (IP addresses, `localhost`, `.local`, `.lan`,
   `.internal`, `.corp`, names without a dot) are never sent to the icon service.
@@ -182,8 +183,7 @@ vaultbar shortcut     Linux/GNOME: bind the hotkey through GNOME settings
 - **No Linux biometrics yet.** Windows Hello and Touch ID are Vaultbar's own (see above); the desktop app's biometric
   unlock is bound to that app and cannot be shared.
 - Screen-capture hiding is not available on Linux.
-- Accounts without a master password (SSO with trusted devices or key connector) are not supported. Neither is the
-  newer "v2" (COSE) key format; Vaultbar says so instead of failing silently.
+- Accounts without a master password (SSO with trusted devices or key connector) are not supported.
 - Organisation items are tested against a synthetic vault and the Bitwarden SDK's RSA test vectors, not yet against a real organisation vault. Items of provider-managed organisations are not decrypted; they count as failed and the rest of the vault opens.
 - Archived and deleted items are not shown.
 - Windows: auto-type cannot type into apps running as administrator unless Vaultbar does too (UIPI).
