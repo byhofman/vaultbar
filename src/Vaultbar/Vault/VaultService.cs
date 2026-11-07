@@ -355,36 +355,7 @@ public sealed class VaultService : IDisposable
     {
         var userKey = _userKey ?? throw new InvalidOperationException("locked");
 
-        var orgKeys = new Dictionary<string, SymmetricKey>();
-        if (s.OrgKeys.Count > 0 && s.EncPrivateKey != null)
-        {
-            var der = EncString.DecryptBytes(s.EncPrivateKey, userKey);
-            using var rsa = RSA.Create();
-            try
-            {
-                rsa.ImportPkcs8PrivateKey(der, out _);
-            }
-            finally
-            {
-                CryptographicOperations.ZeroMemory(der);
-            }
-
-            foreach (var (orgId, enc) in s.OrgKeys)
-            {
-                try
-                {
-                    var raw = EncString.DecryptRsa(enc, rsa);
-                    var key = SymmetricKey.FromBytes(raw);
-                    CryptographicOperations.ZeroMemory(raw);
-                    orgKeys[orgId] = key;
-                    _keys.Add(key);
-                }
-                catch (Exception ex)
-                {
-                    Log.Write($"org key {orgId}: {ex.Message}");
-                }
-            }
-        }
+        var orgKeys = LoadOrganizationKeys(s, userKey);
 
         var folders = new Dictionary<string, string>();
         foreach (var (id, node) in s.Folders)
@@ -439,6 +410,49 @@ public sealed class VaultService : IDisposable
         _orgKeys = orgKeys;
         Items = items;
         FailedItems = failed;
+    }
+
+    private Dictionary<string, SymmetricKey> LoadOrganizationKeys(StoreSnapshot s, SymmetricKey userKey)
+    {
+        var orgKeys = new Dictionary<string, SymmetricKey>();
+        if (s.OrgKeys.Count == 0 || s.EncPrivateKey is null) return orgKeys;
+
+        using var rsa = RSA.Create();
+        try
+        {
+            var der = EncString.DecryptBytes(s.EncPrivateKey, userKey);
+            try
+            {
+                rsa.ImportPkcs8PrivateKey(der, out _);
+            }
+            finally
+            {
+                CryptographicOperations.ZeroMemory(der);
+            }
+        }
+        catch (Exception ex) when (ex is CryptographicException or NotSupportedException or FormatException)
+        {
+            // A damaged private key costs the organisation items, which then count as failed, not the personal vault.
+            Log.Write($"private key: {ex.Message}");
+            return orgKeys;
+        }
+
+        foreach (var (orgId, enc) in s.OrgKeys)
+        {
+            try
+            {
+                var raw = EncString.DecryptRsa(enc, rsa);
+                var key = SymmetricKey.FromBytes(raw);
+                CryptographicOperations.ZeroMemory(raw);
+                orgKeys[orgId] = key;
+                _keys.Add(key);
+            }
+            catch (Exception ex)
+            {
+                Log.Write($"org key {orgId}: {ex.Message}");
+            }
+        }
+        return orgKeys;
     }
 
     private void StartWatching(string path)

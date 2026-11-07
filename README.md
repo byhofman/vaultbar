@@ -179,7 +179,7 @@ vaultbar shortcut     Linux/GNOME: bind the hotkey through GNOME settings
 - Screen-capture hiding is not available on Linux.
 - Accounts without a master password (SSO with trusted devices or key connector) are not supported. Neither is the
   newer "v2" (COSE) key format; Vaultbar says so instead of failing silently.
-- Organisation items are supported but have not been tested against a real organisation vault.
+- Organisation items are tested against a synthetic vault and the Bitwarden SDK's RSA test vectors, not yet against a real organisation vault. Items of provider-managed organisations are not decrypted; they count as failed and the rest of the vault opens.
 - Archived and deleted items are not shown.
 - Windows: auto-type cannot type into apps running as administrator unless Vaultbar does too (UIPI).
 - macOS: tested on Apple Silicon with a synthetic vault. Typing into another app, the physical hotkey press, a real click on the menu bar icon and a real screen lock still need a manual check (VBR-7).
