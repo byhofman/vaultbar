@@ -166,7 +166,7 @@ public sealed class VaultService : IDisposable
         lock (_gate)
         {
             if (provider is null || snapshot is null || _userKey is not { } key) return QuickUnlockStatus.Unavailable;
-            userKey = key.Mac is null ? key.Enc.ToArray() : [.. key.Enc, .. key.Mac];
+            userKey = key.ToBytes();
         }
 
         try
@@ -267,13 +267,13 @@ public sealed class VaultService : IDisposable
     private static void CheckUserKey(StoreSnapshot snapshot, byte[] userKey)
     {
         using var key = SymmetricKey.FromBytes(userKey);
-        var probe = snapshot.EncPrivateKey is { } pk && EncString.TypeOf(pk) == 2 ? pk : null;
+        var probe = snapshot.EncPrivateKey is { } pk && IsAuthenticated(pk) ? pk : null;
         if (probe is null)
         {
             foreach (var (_, node) in snapshot.Ciphers)
             {
                 if (node is not JsonObject cipher || Str(cipher["organizationId"]) != null) continue;
-                if ((Str(cipher["key"]) ?? Str(cipher["name"])) is { } s && EncString.TypeOf(s) == 2)
+                if ((Str(cipher["key"]) ?? Str(cipher["name"])) is { } s && IsAuthenticated(s))
                 {
                     probe = s;
                     break;
@@ -282,6 +282,8 @@ public sealed class VaultService : IDisposable
         }
         if (probe != null) CryptographicOperations.ZeroMemory(EncString.DecryptBytes(probe, key));
     }
+
+    private static bool IsAuthenticated(string encString) => EncString.TypeOf(encString) is 2 or 7;
 
     private void Open(StoreSnapshot snapshot, byte[] userKeyBytes)
     {

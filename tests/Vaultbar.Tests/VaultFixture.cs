@@ -9,7 +9,7 @@ public sealed class VaultFixture
 {
     public const string Email = "alex@example.com";
     public const string UserId = "9a466c6e-0000-4000-8000-000000000001";
-    private readonly SymmetricKey _userKey = SymmetricKey.FromBytes(RandomNumberGenerator.GetBytes(64));
+    private readonly SymmetricKey _userKey;
     private readonly JsonObject _ciphers = new();
     private readonly JsonObject _folders = new();
     private readonly JsonObject _orgKeys = new();
@@ -78,7 +78,7 @@ public sealed class VaultFixture
         if (itemKey)
         {
             var raw = RandomNumberGenerator.GetBytes(64);
-            encItemKey = EncString.Encrypt(raw, baseKey);
+            encItemKey = Wrap(raw, baseKey);
             key = SymmetricKey.FromBytes(raw);
         }
         _ciphers[id] = new JsonObject
@@ -100,6 +100,14 @@ public sealed class VaultFixture
         return id;
     }
 
+    public VaultFixture(SymmetricKey? userKey = null)
+    {
+        _userKey = userKey ?? SymmetricKey.FromBytes(RandomNumberGenerator.GetBytes(64));
+    }
+
+    /// <summary>An account on the "v2" format: a COSE user key, and everything under it as type 7.</summary>
+    public static VaultFixture V2(KeyAlgorithm algorithm = KeyAlgorithm.XChaCha20Poly1305) => new(CoseWriter.MakeKey(algorithm));
+
     public string AddFolder(string name)
     {
         var id = Guid.NewGuid().ToString();
@@ -116,7 +124,7 @@ public sealed class VaultFixture
         if (itemKey)
         {
             var raw = RandomNumberGenerator.GetBytes(64);
-            encItemKey = EncString.Encrypt(raw, _userKey);
+            encItemKey = Wrap(raw, _userKey);
             key = SymmetricKey.FromBytes(raw);
         }
 
@@ -191,7 +199,7 @@ public sealed class VaultFixture
     {
         var masterKey = MasterKey.Derive(password, Email, new KdfConfig(KdfType.Pbkdf2, iterations, null, null));
         using var stretched = MasterKey.Stretch(masterKey);
-        var userKeyBytes = _userKey.Enc.Concat(_userKey.Mac!).ToArray();
+        var userKeyBytes = _userKey.ToBytes();
         const string uid = UserId;
 
         var root = new JsonObject
@@ -211,16 +219,26 @@ public sealed class VaultFixture
         };
         if (_orgKeys.Count > 0)
         {
-            var privateKey = PrivateKeyOverride ?? EncString.Encrypt(_accountRsa.ExportPkcs8PrivateKey(), _userKey);
+            var isV2 = _userKey.KeyId != null;
+            var privateKey = PrivateKeyOverride ?? (isV2
+                ? CoseWriter.Encrypt(_accountRsa.ExportPkcs8PrivateKey(), _userKey, CoseWriter.ContentPkcs8)
+                : EncString.Encrypt(_accountRsa.ExportPkcs8PrivateKey(), _userKey));
             root[$"user_{uid}_crypto_organizationKeys"] = _orgKeys.DeepClone();
             if (LegacyPrivateKeySlot) root[$"user_{uid}_crypto_privateKey"] = privateKey;
-            else root[$"user_{uid}_crypto_accountCryptographicState"] = new JsonObject { ["V1"] = new JsonObject { ["private_key"] = privateKey } };
+            else root[$"user_{uid}_crypto_accountCryptographicState"] = new JsonObject { [isV2 ? "V2" : "V1"] = new JsonObject { ["private_key"] = privateKey } };
         }
         Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath(path))!);
         File.WriteAllText(path, root.ToJsonString());
     }
 
-    private static string? Enc(string? value, SymmetricKey key) => value is null ? null : EncString.Encrypt(value, key);
+    private static string? Enc(string? value, SymmetricKey key)
+    {
+        if (value is null) return null;
+        return key.KeyId is null ? EncString.Encrypt(value, key) : CoseWriter.Encrypt(CoseWriter.PadUtf8(value), key, CoseWriter.ContentPaddedUtf8);
+    }
+
+    private static string Wrap(byte[] raw, SymmetricKey key) =>
+        key.KeyId is null ? EncString.Encrypt(raw, key) : CoseWriter.Encrypt(raw, key, CoseWriter.ContentLegacyKey);
 
     public static VaultFixture Demo()
     {
