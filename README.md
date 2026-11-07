@@ -46,7 +46,7 @@ without leaving the app you are in.
 | F1 / Ctrl+/ | keyboard shortcuts | keyboard shortcuts |
 
 On macOS use ⌘ instead of Ctrl, and ⌥ for Alt. Items with **master password re-prompt** ask for Windows Hello or Touch ID (or the
-master password) once per opening. On the unlock screen, Ctrl+H (macOS ⌘H) retries Windows Hello or Touch ID.
+master password) once per opening. On the unlock screen, Ctrl+H (macOS ⌘R) retries Windows Hello or Touch ID.
 
 ![Item details](docs/details.png)
 
