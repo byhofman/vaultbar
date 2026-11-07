@@ -70,6 +70,8 @@ internal sealed class MacPlatform(string? pasteboardName = null, string lockNoti
         return new ForeignWindow(app, Ax.FocusedWindowTitle(pid) ?? "", name, pid);
     }
 
+    public Vault.IQuickUnlockProvider QuickUnlock { get; } = new MacTouchId(new NativeTouchId(), Path.Combine(Paths.CacheDir, "touch-id-key.dat"));
+
     public PixelPoint? AnchorPoint(ForeignWindow? target) => null;
 
     public void AttachWindow(Window window)

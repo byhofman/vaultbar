@@ -8,6 +8,7 @@ namespace Vaultbar.Tests;
 public sealed class VaultFixture
 {
     public const string Email = "alex@example.com";
+    public const string UserId = "9a466c6e-0000-4000-8000-000000000001";
     private readonly SymmetricKey _userKey = SymmetricKey.FromBytes(RandomNumberGenerator.GetBytes(64));
     private readonly JsonObject _ciphers = new();
     private readonly JsonObject _folders = new();
@@ -191,7 +192,7 @@ public sealed class VaultFixture
         var masterKey = MasterKey.Derive(password, Email, new KdfConfig(KdfType.Pbkdf2, iterations, null, null));
         using var stretched = MasterKey.Stretch(masterKey);
         var userKeyBytes = _userKey.Enc.Concat(_userKey.Mac!).ToArray();
-        const string uid = "9a466c6e-0000-4000-8000-000000000001";
+        const string uid = UserId;
 
         var root = new JsonObject
         {

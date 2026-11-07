@@ -25,6 +25,7 @@ check "bundle signature verifies" codesign --verify --deep --strict "$apps/Vault
 check "no quarantine left" zsh -c "! xattr -lr '$apps/Vaultbar.app' | grep -q com.apple.quarantine"
 check "Info.plist is valid" plutil -lint "$apps/Vaultbar.app/Contents/Info.plist"
 check "CLI link runs" "$link" version
+check "Touch ID library is in the bundle for this CPU" zsh -c "lipo -archs '$apps/Vaultbar.app/Contents/MacOS/libvaultbar-touchid.dylib' | grep -qx '$(uname -m)'"
 check "login item plist is valid" plutil -lint "$plist"
 check "login item points at the app" zsh -c "plutil -extract ProgramArguments.0 raw '$plist' | grep -qx '$exe'"
 check "login item starts in the background" zsh -c "plutil -extract ProgramArguments.1 raw '$plist' | grep -qx background"
