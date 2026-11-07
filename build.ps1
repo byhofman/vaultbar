@@ -29,7 +29,7 @@ foreach ($rid in $Runtime) {
 <dict>
   <key>CFBundleName</key><string>Vaultbar</string>
   <key>CFBundleDisplayName</key><string>Vaultbar</string>
-  <key>CFBundleIdentifier</key><string>local.vaultbar</string>
+  <key>CFBundleIdentifier</key><string>dev.byhofman.vaultbar</string>
   <key>CFBundleExecutable</key><string>vaultbar</string>
   <key>CFBundlePackageType</key><string>APPL</string>
   <key>CFBundleVersion</key><string>$Version</string>

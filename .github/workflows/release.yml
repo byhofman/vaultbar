@@ -31,13 +31,29 @@ jobs:
           $version = if ($env:GITHUB_REF_TYPE -eq 'tag') { $env:GITHUB_REF_NAME.TrimStart('v') } else { '0.0.0' }
           ./build.ps1 -Runtime osx-arm64,osx-x64 -Version $version
 
+      - name: Package
+        env:
+          # Only a release signs and notarizes; every other run proves the packaging with an ad-hoc signature.
+          APPLE_CERTIFICATE_P12: ${{ github.ref_type == 'tag' && secrets.APPLE_CERTIFICATE_P12 || '' }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          APPLE_APP_PASSWORD: ${{ secrets.APPLE_APP_PASSWORD }}
+        run: packaging/macos/package.sh dist osx-arm64 osx-x64
+
+      - name: Disk image
+        run: tests/dmg-test-macos.sh dist/vaultbar-osx-arm64.dmg
+
       - name: Installer
         run: tests/install-test-macos.sh dist/vaultbar-osx-arm64.tar.gz
 
       - uses: actions/upload-artifact@v4
         with:
           name: vaultbar-macos
-          path: dist/*.tar.gz
+          path: |
+            dist/*.tar.gz
+            dist/*.dmg
 
   build:
     runs-on: ubuntu-latest
@@ -77,4 +93,4 @@ jobs:
       - name: Release
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release create "$GITHUB_REF_NAME" dist/*.zip dist/*.tar.gz --repo "$GITHUB_REPOSITORY" --title "$GITHUB_REF_NAME" --generate-notes
+        run: gh release create "$GITHUB_REF_NAME" dist/*.zip dist/*.tar.gz dist/*.dmg --repo "$GITHUB_REPOSITORY" --title "$GITHUB_REF_NAME" --generate-notes

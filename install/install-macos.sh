@@ -63,7 +63,8 @@ rm -rf "$app"
 mv "$tmp/Vaultbar.app" "$app"
 chmod +x "$exe"
 xattr -dr com.apple.quarantine "$app" 2>/dev/null || true
-codesign --force --deep --sign - "$app" >/dev/null 2>&1
+# A Developer ID signature is kept: replacing it would undo the notarization and the Accessibility grant.
+codesign -dv "$app" 2>&1 | grep -q '^Authority=Developer ID' || codesign --force --deep --sign - "$app" >/dev/null 2>&1
 
 mkdir -p "${link:h}"
 ln -sf "$exe" "$link"
