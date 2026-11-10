@@ -43,7 +43,7 @@ public sealed class AppController
         _lifetime.ShutdownRequested += (_, _) => OnSystemQuit();
         AppDomain.CurrentDomain.UnhandledException += (_, _) => ClearClipboardOnCrash();
         Vault.Probe();
-        _window = new QuickWindow(this);
+        _window = new QuickWindow(this) { Icon = AppIcon.Create() };
         Platform.AttachWindow(_window);
 
         try

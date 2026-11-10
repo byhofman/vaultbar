@@ -5,6 +5,7 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Media;
 using Avalonia.Media.Imaging;
+using Avalonia.Platform;
 using Vaultbar.Vault;
 
 namespace Vaultbar.UI;
@@ -206,20 +207,6 @@ public sealed class FaviconService
 
 public static class AppIcon
 {
-    public static WindowIcon Create()
-    {
-        const int size = 64;
-        var bitmap = new RenderTargetBitmap(new PixelSize(size, size), new Vector(96, 96));
-        using (var ctx = bitmap.CreateDrawingContext())
-        using (ctx.PushTransform(Matrix.CreateScale(size / 24.0, size / 24.0)))
-        {
-            ctx.DrawGeometry(new SolidColorBrush(Color.Parse("#175DDC")), null, ResultRow.Resource("IconShield")!);
-            using (ctx.PushTransform(Matrix.CreateScale(0.56, 0.56) * Matrix.CreateTranslation(5.5, 4.6)))
-                ctx.DrawGeometry(Brushes.White, null, ResultRow.Resource("IconSearch")!);
-        }
-        var stream = new MemoryStream();
-        bitmap.Save(stream);
-        stream.Position = 0;
-        return new WindowIcon(stream);
-    }
+    public static WindowIcon Create() =>
+        new(AssetLoader.Open(new Uri(OperatingSystem.IsWindows() ? "avares://vaultbar/Assets/app.ico" : "avares://vaultbar/Assets/icon-256.png")));
 }

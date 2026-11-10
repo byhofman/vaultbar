@@ -11,6 +11,24 @@ $dist = Join-Path $root 'dist'
 [xml]$proj = Get-Content "$root/src/Vaultbar/Vaultbar.csproj"
 if (-not $Version) { $Version = $proj.Project.PropertyGroup.Version | Select-Object -First 1 }
 
+function New-Icns([string]$Path) {
+    $chunks = [ordered]@{ ic11 = 32; ic12 = 64; ic07 = 128; ic13 = 256; ic08 = 256; ic14 = 512; ic09 = 512; ic10 = 1024 }
+    $body = [IO.MemoryStream]::new()
+    foreach ($type in $chunks.Keys) {
+        $png = [IO.File]::ReadAllBytes("$root/branding/app-icon/png/icon-$($chunks[$type]).png")
+        $body.Write([Text.Encoding]::ASCII.GetBytes($type))
+        $body.Write([BitConverter]::GetBytes([Net.IPAddress]::HostToNetworkOrder([int]($png.Length + 8))))
+        $body.Write($png)
+    }
+    $file = [IO.File]::Create($Path)
+    try {
+        $file.Write([Text.Encoding]::ASCII.GetBytes('icns'))
+        $file.Write([BitConverter]::GetBytes([Net.IPAddress]::HostToNetworkOrder([int]($body.Length + 8))))
+        $body.WriteTo($file)
+    }
+    finally { $file.Dispose() }
+}
+
 foreach ($rid in $Runtime) {
     $out = Join-Path $dist $rid
     Remove-Item $out -Recurse -Force -ErrorAction SilentlyContinue
@@ -22,6 +40,8 @@ foreach ($rid in $Runtime) {
         if ($LASTEXITCODE) { throw "publish $rid failed" }
         & "$root/src/Vaultbar.TouchId/build.sh" ($rid -eq 'osx-arm64' ? 'arm64' : 'x86_64') "$app/Contents/MacOS"
         if ($LASTEXITCODE) { throw "Touch ID library for $rid failed" }
+        New-Item -ItemType Directory -Force "$app/Contents/Resources" | Out-Null
+        New-Icns "$app/Contents/Resources/Vaultbar.icns"
         @"
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -31,6 +51,7 @@ foreach ($rid in $Runtime) {
   <key>CFBundleDisplayName</key><string>Vaultbar</string>
   <key>CFBundleIdentifier</key><string>dev.byhofman.vaultbar</string>
   <key>CFBundleExecutable</key><string>vaultbar</string>
+  <key>CFBundleIconFile</key><string>Vaultbar</string>
   <key>CFBundlePackageType</key><string>APPL</string>
   <key>CFBundleVersion</key><string>$Version</string>
   <key>CFBundleShortVersionString</key><string>$Version</string>

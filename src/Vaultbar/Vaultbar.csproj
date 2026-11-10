@@ -15,6 +15,7 @@
     <Copyright>Copyright (c) 2026 Thomas Hofman</Copyright>
     <AvaloniaUseCompiledBindingsByDefault>true</AvaloniaUseCompiledBindingsByDefault>
     <ApplicationManifest>app.manifest</ApplicationManifest>
+    <ApplicationIcon>..\..\branding\app-icon\app.ico</ApplicationIcon>
     <InvariantGlobalization>true</InvariantGlobalization>
     <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
     <EnableCompressionInSingleFile>true</EnableCompressionInSingleFile>
@@ -30,6 +31,11 @@
     <PackageReference Include="Microsoft.Win32.SystemEvents" Version="10.0.0" />
     <PackageReference Include="System.Formats.Cbor" Version="10.0.0" />
     <PackageReference Include="System.Security.Cryptography.ProtectedData" Version="10.0.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <AvaloniaResource Include="..\..\branding\app-icon\app.ico" Link="Assets\app.ico" />
+    <AvaloniaResource Include="..\..\branding\app-icon\png\icon-256.png" Link="Assets\icon-256.png" />
   </ItemGroup>
 
   <ItemGroup>
