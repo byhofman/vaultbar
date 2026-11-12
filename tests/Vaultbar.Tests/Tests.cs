@@ -383,7 +383,7 @@ public sealed class TouchIdTests : IDisposable
         return vault;
     }
 
-    [Fact]
+    [MacFact]
     public async Task SetUp_ThenTouch_UnlocksTheVault()
     {
         var vault = await Enrolled();
@@ -392,14 +392,14 @@ public sealed class TouchIdTests : IDisposable
         Assert.Equal("Azure#2026", vault.Items.Single(i => i.Name == "Azure Portal").Password);
     }
 
-    [Fact]
+    [MacFact]
     public async Task SetUp_AsksForTouchSoABrokenSensorShowsAtOnce()
     {
         await Enrolled();
         Assert.Equal(1, _enclave.Prompts);
     }
 
-    [Fact]
+    [MacFact]
     public async Task KeyAndStoreFiles_AreOnlyReadableByTheUser()
     {
         if (OperatingSystem.IsWindows()) return;
@@ -409,7 +409,7 @@ public sealed class TouchIdTests : IDisposable
         Assert.Equal(ownerOnly, File.GetUnixFileMode(StorePath));
     }
 
-    [Theory]
+    [MacTheory]
     [InlineData(-2)]
     [InlineData(-3)]
     [InlineData(-4)]
@@ -425,7 +425,7 @@ public sealed class TouchIdTests : IDisposable
         Assert.True(vault.CanQuickUnlock);
     }
 
-    [Fact]
+    [MacFact]
     public async Task ClosedLid_KeepsTheEnrollmentAndDoesNotAsk()
     {
         var vault = await Enrolled();
@@ -437,7 +437,7 @@ public sealed class TouchIdTests : IDisposable
         Assert.True(vault.CanQuickUnlock);
     }
 
-    [Theory]
+    [MacTheory]
     [InlineData(-25300)]
     [InlineData(-25293)]
     public async Task ChangedFingers_ForgetTheEnrollmentSoThePasswordCanSetItUpAgain(int code)
@@ -453,7 +453,7 @@ public sealed class TouchIdTests : IDisposable
         Assert.True(await vault.ShouldOfferQuickUnlockAsync());
     }
 
-    [Fact]
+    [MacFact]
     public async Task LockedOutSensor_FailsWithoutForgetting()
     {
         var vault = await Enrolled();
@@ -463,7 +463,7 @@ public sealed class TouchIdTests : IDisposable
         Assert.True(vault.CanQuickUnlock);
     }
 
-    [Fact]
+    [MacFact]
     public async Task MissingKeyFile_ForgetsTheEnrollment()
     {
         var vault = await Enrolled();
@@ -473,7 +473,7 @@ public sealed class TouchIdTests : IDisposable
         Assert.False(vault.CanQuickUnlock);
     }
 
-    [Fact]
+    [MacFact]
     public async Task EnclaveRefusingToCreateAKey_DoesNotEnrollOrLeaveAFile()
     {
         VaultFixture.Demo().Write(DataPath, "correct horse");
@@ -486,7 +486,7 @@ public sealed class TouchIdTests : IDisposable
         Assert.False(vault.CanQuickUnlock);
     }
 
-    [Fact]
+    [MacFact]
     public async Task TurningItOff_RemovesTheKeyFile()
     {
         var vault = await Enrolled();
@@ -510,7 +510,7 @@ public class UrlTests
     [InlineData("", null)]
     public void WebUrl_OnlyAllowsHttp(string input, string? expected)
     {
-        Assert.Equal(expected, VaultItem.WebUrl(input));
+        Assert.Equal(expected, WebAddress.From(input)?.Value);
     }
 
     [Theory]

@@ -2,16 +2,18 @@
 # Installs (or removes) Vaultbar for the current user on Linux. No root, no prompts.
 #   curl -fsSL https://raw.githubusercontent.com/byhofman/vaultbar/main/install/install.sh | bash
 #   curl -fsSL https://raw.githubusercontent.com/byhofman/vaultbar/main/install/install.sh | bash -s -- --uninstall
-# Options: --uninstall  --version vX.Y.Z  --archive path.tar.gz  --repo owner/name  --no-start
+# Options: --uninstall  --version vX.Y.Z  --archive path.tar.gz [--sha256 hex]  --repo owner/name  --no-start
+# A download is checked against the SHA-256 digest GitHub records for the release asset, and refused if it differs.
 set -euo pipefail
 
-repo="byhofman/vaultbar" version="latest" archive="" uninstall=0 start=1
+repo="byhofman/vaultbar" version="latest" archive="" expected="" uninstall=0 start=1
 bin_dir="${XDG_BIN_HOME:-$HOME/.local/bin}"
 while [ $# -gt 0 ]; do
   case "$1" in
     --uninstall) uninstall=1 ;;
     --version) version="$2"; shift ;;
     --archive) archive="$2"; shift ;;
+    --sha256) expected="$2"; shift ;;
     --repo) repo="$2"; shift ;;
     --no-start) start=0 ;;
     *) echo "unknown option: $1" >&2; exit 2 ;;
@@ -50,13 +52,29 @@ esac
 
 tmp=$(mktemp -d)
 trap 'rm -rf "$tmp"' EXIT
+
+fetch() { if command -v curl >/dev/null 2>&1; then curl -fsSL "$1" -o "$2"; else wget -qO "$2" "$1"; fi; }
+sha256() { if command -v sha256sum >/dev/null 2>&1; then sha256sum "$1"; else shasum -a 256 "$1"; fi | cut -d" " -f1; }
+
 if [ -z "$archive" ]; then
-  if [ "$version" = latest ]; then base="https://github.com/$repo/releases/latest/download"
-  else base="https://github.com/$repo/releases/download/$version"; fi
-  archive="$tmp/vaultbar-$rid.tar.gz"
-  echo "Downloading $base/vaultbar-$rid.tar.gz"
-  if command -v curl >/dev/null 2>&1; then curl -fsSL "$base/vaultbar-$rid.tar.gz" -o "$archive"
-  else wget -qO "$archive" "$base/vaultbar-$rid.tar.gz"; fi
+  asset="vaultbar-$rid.tar.gz"
+  if [ "$version" = latest ]; then api="https://api.github.com/repos/$repo/releases/latest"
+  else api="https://api.github.com/repos/$repo/releases/tags/$version"; fi
+  fetch "$api" "$tmp/release.json" || { echo "Could not read the release from GitHub ($api). Try again later, or download it and use --archive." >&2; exit 1; }
+  tokens=$(grep -oE '"(tag_name|name|digest)": *"[^"]*"' "$tmp/release.json")
+  tag=$(echo "$tokens" | sed -n 's/^"tag_name": *"\(.*\)"$/\1/p' | head -n 1)
+  expected=$(echo "$tokens" | awk -v want="\"name\": \"$asset\"" 'found && /^"digest"/ { sub(/.*"sha256:/, ""); sub(/"$/, ""); print; exit } $0 == want { found = 1 }')
+  [ -n "$tag" ] && [ -n "$expected" ] || { echo "Release $version has no $asset with a SHA-256 digest." >&2; exit 1; }
+  archive="$tmp/$asset"
+  echo "Downloading $asset ($tag)"
+  fetch "https://github.com/$repo/releases/download/$tag/$asset" "$archive"
+fi
+if [ -n "$expected" ]; then
+  actual=$(sha256 "$archive")
+  if [ "$actual" != "$expected" ]; then
+    echo "SHA-256 mismatch for $archive: expected $expected, got $actual. Nothing was installed." >&2
+    exit 1
+  fi
 fi
 tar -xzf "$archive" -C "$tmp"
 

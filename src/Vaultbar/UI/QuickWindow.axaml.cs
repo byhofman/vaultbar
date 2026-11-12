@@ -1,4 +1,5 @@
 using System.Collections.ObjectModel;
+using System.Runtime.InteropServices;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input;
@@ -113,14 +114,12 @@ public partial class QuickWindow : Window
         _app.Platform.AfterHide();
         SearchBox.Text = "";
         PasswordBox.Text = "";
-        CloseDetails();
-        _repromptPassed.Clear();
-        _afterReprompt = null;
-        _rows.Clear();
+        ForgetItems();
     }
 
     public void OnVaultChanged()
     {
+        if (_app.Vault.State != VaultState.Unlocked) ForgetItems();
         if (!IsVisible) return;
         if (_mode is Mode.Search or Mode.Details or Mode.Reprompt or Mode.Help && _app.Vault.State == VaultState.Unlocked)
         {
@@ -129,6 +128,17 @@ public partial class QuickWindow : Window
             return;
         }
         if (_mode != Mode.Busy) UpdateMode();
+    }
+
+    /// <summary>Drops every reference to items and revealed values, so locking leaves none of them reachable.</summary>
+    private void ForgetItems()
+    {
+        CloseDetails();
+        _rows.Clear();
+        _selected = -1;
+        _repromptPassed.Clear();
+        _repromptItem = null;
+        _afterReprompt = null;
     }
 
     private void PlaceOnScreen(ForeignWindow? target)
@@ -454,7 +464,7 @@ public partial class QuickWindow : Window
                 row.Revealed = !row.Revealed;
                 return true;
             case Key.Enter when row != null && primary && row.Field.Kind == FieldKind.Url:
-                if (VaultItem.WebUrl(row.Field.Value()) is { } url)
+                if (WebAddress.From(row.Field.Value()) is { } url)
                 {
                     _app.Platform.OpenUrl(url);
                     Dismiss();
@@ -553,7 +563,7 @@ public partial class QuickWindow : Window
             }
             catch (Exception ex)
             {
-                Log.Write($"copy: {ex.Message}");
+                Log.Write($"copy: {Log.Shape(ex)}");
                 Toast($"Could not read {action.Label.ToLowerInvariant()}");
                 return;
             }
@@ -607,28 +617,32 @@ public partial class QuickWindow : Window
             var steps = AutoTypeSequence.Build(template, item.Username, item.Password, item.CurrentTotp);
             _app.Usage.Record(item.Id);
             _typing = true;
-            bool ok;
+            AutoTypeResult result;
             try
             {
-                ok = await _app.Platform.AutoTypeAsync(_target, steps, Hide);
+                result = await _app.Platform.AutoTypeAsync(_target, steps, Hide);
             }
-            catch (Exception ex)
+            catch (Exception ex) when (ex is ExternalException or DllNotFoundException or EntryPointNotFoundException or InvalidOperationException)
             {
-                Log.Write($"autotype: {ex}");
-                ok = false;
+                Log.Write($"autotype: {Log.Shape(ex)}");
+                result = AutoTypeResult.TargetNotFocused;
             }
             finally
             {
                 _typing = false;
             }
 
-            if (!ok)
+            switch (result)
             {
-                var target = _target;
-                Present(target);
-                if (item.Password is { Length: > 0 } pw) _ = _app.CopyAsync(pw, true);
-                Toast("Couldn't switch back to the previous window · password copied");
-                return;
+                case AutoTypeResult.TargetNotFocused:
+                    Present(_target);
+                    if (item.Password is { Length: > 0 } pw) _ = _app.CopyAsync(pw, true);
+                    Toast("Couldn't switch back to the previous window · password copied");
+                    return;
+                case AutoTypeResult.Interrupted:
+                    Present(_target);
+                    Toast("Stopped typing: another window took focus");
+                    return;
             }
 
             Dismiss();
@@ -652,12 +666,12 @@ public partial class QuickWindow : Window
 
     private void OpenInWebVault(VaultItem item)
     {
-        if (VaultItem.WebUrl(_app.Vault.WebVaultUrl) is not { } baseUrl)
+        if (WebAddress.ForWebVaultItem(_app.Vault.WebVaultUrl, item.Id) is not { } address)
         {
             Toast("No web vault address configured");
             return;
         }
-        _app.Platform.OpenUrl($"{baseUrl.TrimEnd('/')}/#/vault?itemId={Uri.EscapeDataString(item.Id)}&action=view");
+        _app.Platform.OpenUrl(address);
         Dismiss();
     }
 

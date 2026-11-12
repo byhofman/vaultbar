@@ -2,15 +2,17 @@
 # Installs (or removes) Vaultbar on macOS. No prompts or admin rights; uses ~/Applications if /Applications is not writable.
 #   curl -fsSL https://raw.githubusercontent.com/byhofman/vaultbar/main/install/install-macos.sh | zsh
 #   curl -fsSL https://raw.githubusercontent.com/byhofman/vaultbar/main/install/install-macos.sh | zsh -s -- --uninstall
-# Options: --uninstall  --version vX.Y.Z  --archive path.tar.gz  --repo owner/name  --no-start  --dir path
+# Options: --uninstall  --version vX.Y.Z  --archive path.tar.gz [--sha256 hex]  --repo owner/name  --no-start  --dir path
+# A download is checked against the SHA-256 digest GitHub records for the release asset, and refused if it differs.
 set -euo pipefail
 
-repo="byhofman/vaultbar" version="latest" archive="" uninstall=0 start=1 apps=""
+repo="byhofman/vaultbar" version="latest" archive="" expected="" uninstall=0 start=1 apps=""
 while (( $# > 0 )); do
   case "$1" in
     --uninstall) uninstall=1 ;;
     --version) version="$2"; shift ;;
     --archive) archive="$2"; shift ;;
+    --sha256) expected="$2"; shift ;;
     --repo) repo="$2"; shift ;;
     --no-start) start=0 ;;
     --dir) apps="$2"; shift ;;
@@ -49,11 +51,24 @@ esac
 tmp=$(mktemp -d)
 trap 'rm -rf "$tmp"' EXIT
 if [[ -z $archive ]]; then
-  if [[ $version == latest ]]; then base="https://github.com/$repo/releases/latest/download"
-  else base="https://github.com/$repo/releases/download/$version"; fi
-  archive="$tmp/vaultbar-$rid.tar.gz"
-  print "Downloading $base/vaultbar-$rid.tar.gz"
-  curl -fsSL "$base/vaultbar-$rid.tar.gz" -o "$archive"
+  asset="vaultbar-$rid.tar.gz"
+  if [[ $version == latest ]]; then api="https://api.github.com/repos/$repo/releases/latest"
+  else api="https://api.github.com/repos/$repo/releases/tags/$version"; fi
+  curl -fsSL "$api" -o "$tmp/release.json" || { print -u2 "Could not read the release from GitHub ($api). Try again later, or download it and use --archive."; exit 1; }
+  tokens=$(grep -oE '"(tag_name|name|digest)": *"[^"]*"' "$tmp/release.json")
+  tag=$(print -r -- "$tokens" | sed -n 's/^"tag_name": *"\(.*\)"$/\1/p' | head -n 1)
+  expected=$(print -r -- "$tokens" | awk -v want="\"name\": \"$asset\"" 'found && /^"digest"/ { sub(/.*"sha256:/, ""); sub(/"$/, ""); print; exit } $0 == want { found = 1 }')
+  [[ -n $tag && -n $expected ]] || { print -u2 "Release $version has no $asset with a SHA-256 digest."; exit 1; }
+  archive="$tmp/$asset"
+  print "Downloading $asset ($tag)"
+  curl -fsSL "https://github.com/$repo/releases/download/$tag/$asset" -o "$archive"
+fi
+if [[ -n $expected ]]; then
+  actual=$(shasum -a 256 "$archive" | cut -d" " -f1)
+  if [[ $actual != "$expected" ]]; then
+    print -u2 "SHA-256 mismatch for $archive: expected $expected, got $actual. Nothing was installed."
+    exit 1
+  fi
 fi
 tar -xzf "$archive" -C "$tmp"
 

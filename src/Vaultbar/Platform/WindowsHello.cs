@@ -34,7 +34,7 @@ internal sealed unsafe class WindowsHello : IQuickUnlockProvider
         }
         catch (Exception ex)
         {
-            Log.Write($"windows hello: {ex.Message}");
+            Log.Write($"windows hello: {Log.Shape(ex)}");
             return false;
         }
     });
@@ -84,7 +84,7 @@ internal sealed unsafe class WindowsHello : IQuickUnlockProvider
         }
         catch (Exception ex)
         {
-            Log.Write($"windows hello: {ex.Message}");
+            Log.Write($"windows hello: {Log.Shape(ex)}");
             return (QuickUnlockStatus.Failed, null);
         }
     });
@@ -102,7 +102,7 @@ internal sealed unsafe class WindowsHello : IQuickUnlockProvider
         }
         catch (Exception ex)
         {
-            Log.Write($"windows hello: {ex.Message}");
+            Log.Write($"windows hello: {Log.Shape(ex)}");
         }
         return true;
     });

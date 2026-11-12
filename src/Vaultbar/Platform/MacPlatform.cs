@@ -49,7 +49,7 @@ internal sealed class MacPlatform(string? pasteboardName = null, string lockNoti
         }
         catch (Exception ex)
         {
-            Log.Write($"hotkey: {ex}");
+            Log.Write($"hotkey: {Log.Shape(ex)}");
         }
         return 0;
     }
@@ -125,9 +125,9 @@ internal sealed class MacPlatform(string? pasteboardName = null, string lockNoti
         return null;
     }
 
-    public async Task<bool> AutoTypeAsync(ForeignWindow? target, IReadOnlyList<TypeStep> steps, Action hideWindow)
+    public async Task<AutoTypeResult> AutoTypeAsync(ForeignWindow? target, IReadOnlyList<TypeStep> steps, Action hideWindow)
     {
-        if (target is null) return false;
+        if (target is null) return AutoTypeResult.TargetNotFocused;
         const ulong modifierMask = 0x20000 | 0x40000 | 0x80000 | 0x100000;
         for (var i = 0; i < 100 && (Cg.CGEventSourceFlagsState(1) & modifierMask) != 0; i++)
             await Task.Delay(20);
@@ -142,42 +142,24 @@ internal sealed class MacPlatform(string? pasteboardName = null, string lockNoti
             var front = ObjC.Send(workspace, ObjC.Sel("frontmostApplication"));
             ok = front != 0 && ObjC.SendInt(front, ObjC.Sel("processIdentifier")) == target.Pid;
         }
-        if (!ok) return false;
+        if (!ok) return AutoTypeResult.TargetNotFocused;
         await Task.Delay(80);
 
-        await Task.Run(() =>
-        {
-            foreach (var step in steps)
-            {
-                switch (step)
-                {
-                    case TypeText t:
-                        foreach (var rune in t.Text.EnumerateRunes())
-                        {
-                            if (rune.Value == '\n') Cg.TapKey(36);
-                            else if (rune.Value == '\t') Cg.TapKey(48);
-                            else Cg.TypeString(rune.ToString());
-                        }
-                        break;
-                    case TypeKey k:
-                        Cg.TapKey(k.Key == SpecialKey.Tab ? (ushort)48 : (ushort)36);
-                        break;
-                    case TypeDelay delay:
-                        Thread.Sleep(delay.Milliseconds);
-                        break;
-                }
-                Thread.Sleep(40);
-            }
-        });
-        return true;
+        // NSRunningApplication returns its properties atomically, so the check is safe off the main thread.
+        return await Task.Run(() => AutoTyper.Run(steps, new Cg.Keyboard(), () => ObjC.SendBool(target.Handle, ObjC.Sel("isActive"))));
     }
+
+    internal static readonly string[] ConcealedMarkers = ["org.nspasteboard.ConcealedType", "org.nspasteboard.TransientType"];
 
     public Task<object?> SetClipboardAsync(string text)
     {
         var pb = Pasteboard();
-        ObjC.SendLong(pb, ObjC.Sel("clearContents"));
+        // Current host only keeps the copy off Universal Clipboard; the nspasteboard.org markers keep it out of clipboard history apps.
+        const nint currentHostOnly = 1;
+        ObjC.SendLong(pb, ObjC.Sel("prepareForNewContentsWithOptions:"), currentHostOnly);
         ObjC.Send(pb, ObjC.Sel("setString:forType:"), ObjC.NSString(text), ObjC.NSString("public.utf8-plain-text"));
-        ObjC.Send(pb, ObjC.Sel("setString:forType:"), ObjC.NSString(""), ObjC.NSString("org.nspasteboard.ConcealedType"));
+        foreach (var marker in ConcealedMarkers)
+            ObjC.Send(pb, ObjC.Sel("setString:forType:"), ObjC.NSString(""), ObjC.NSString(marker));
         return Task.FromResult<object?>(ObjC.SendLong(pb, ObjC.Sel("changeCount")));
     }
 
@@ -193,10 +175,10 @@ internal sealed class MacPlatform(string? pasteboardName = null, string lockNoti
         ? ObjC.Send(ObjC.Class("NSPasteboard"), ObjC.Sel("generalPasteboard"))
         : ObjC.Send(ObjC.Class("NSPasteboard"), ObjC.Sel("pasteboardWithName:"), ObjC.NSString(pasteboardName));
 
-    public void OpenUrl(string url)
+    public void OpenUrl(Vault.WebAddress address)
     {
         var psi = new ProcessStartInfo("open") { UseShellExecute = false };
-        psi.ArgumentList.Add(url);
+        psi.ArgumentList.Add(address.Value);
         Process.Start(psi)?.Dispose();
     }
 
@@ -229,7 +211,7 @@ internal sealed class MacPlatform(string? pasteboardName = null, string lockNoti
         }
         catch (Exception ex)
         {
-            Log.Write($"system lock: {ex}");
+            Log.Write($"system lock: {Log.Shape(ex)}");
         }
     }
 
@@ -274,6 +256,8 @@ internal sealed class MacPlatform(string? pasteboardName = null, string lockNoti
         [DllImport(Lib, EntryPoint = "objc_msgSend")] public static extern nint Send(nint receiver, nint selector, nint arg1, nint arg2);
         [DllImport(Lib, EntryPoint = "objc_msgSend")] public static extern int SendInt(nint receiver, nint selector);
         [DllImport(Lib, EntryPoint = "objc_msgSend")] public static extern long SendLong(nint receiver, nint selector);
+        [DllImport(Lib, EntryPoint = "objc_msgSend")] public static extern long SendLong(nint receiver, nint selector, nint arg);
+        [DllImport(Lib, EntryPoint = "objc_msgSend")] private static extern byte SendByte(nint receiver, nint selector);
         [DllImport(Lib, EntryPoint = "objc_msgSend")] private static extern byte SendByte(nint receiver, nint selector, nint arg);
         [DllImport(Lib, EntryPoint = "objc_msgSend")] private static extern nint SendUtf8(nint receiver, nint selector, [MarshalAs(UnmanagedType.LPUTF8Str)] string arg);
 
@@ -282,6 +266,8 @@ internal sealed class MacPlatform(string? pasteboardName = null, string lockNoti
         [DllImport(Lib)] public static extern nint objc_allocateClassPair(nint superclass, [MarshalAs(UnmanagedType.LPStr)] string name, nint extraBytes);
         [DllImport(Lib)] public static extern void objc_registerClassPair(nint cls);
         [DllImport(Lib)] public static extern byte class_addMethod(nint cls, nint selector, nint implementation, [MarshalAs(UnmanagedType.LPStr)] string types);
+
+        public static bool SendBool(nint receiver, nint selector) => SendByte(receiver, selector) != 0;
 
         public static bool SendBool(nint receiver, nint selector, nint arg) => SendByte(receiver, selector, arg) != 0;
 
@@ -351,32 +337,39 @@ internal sealed class MacPlatform(string? pasteboardName = null, string lockNoti
         [DllImport(Lib)] private static extern void CGEventPost(uint tap, nint ev);
         [DllImport(Lib)] public static extern ulong CGEventSourceFlagsState(int stateId);
 
-        public static void TypeString(string s)
+        public sealed class Keyboard : IKeyboard
         {
-            fixed (char* p = s)
+            private const ushort Tab = 48, Return = 36;
+
+            public void Type(System.Text.Rune character)
+            {
+                Span<char> units = stackalloc char[2];
+                var length = character.EncodeToUtf16(units);
+                fixed (char* p = units)
+                {
+                    foreach (byte down in new byte[] { 1, 0 })
+                    {
+                        var ev = CGEventCreateKeyboardEvent(0, 0, down);
+                        CGEventSetFlags(ev, 0);
+                        CGEventKeyboardSetUnicodeString(ev, (nuint)length, p);
+                        CGEventPost(0, ev);
+                        Ax.CFRelease(ev);
+                    }
+                }
+                Thread.Sleep(4);
+            }
+
+            public void Press(SpecialKey key)
             {
                 foreach (byte down in new byte[] { 1, 0 })
                 {
-                    var ev = CGEventCreateKeyboardEvent(0, 0, down);
+                    var ev = CGEventCreateKeyboardEvent(0, key == SpecialKey.Tab ? Tab : Return, down);
                     CGEventSetFlags(ev, 0);
-                    CGEventKeyboardSetUnicodeString(ev, (nuint)s.Length, p);
                     CGEventPost(0, ev);
                     Ax.CFRelease(ev);
                 }
+                Thread.Sleep(4);
             }
-            Thread.Sleep(4);
-        }
-
-        public static void TapKey(ushort virtualKey)
-        {
-            foreach (byte down in new byte[] { 1, 0 })
-            {
-                var ev = CGEventCreateKeyboardEvent(0, virtualKey, down);
-                CGEventSetFlags(ev, 0);
-                CGEventPost(0, ev);
-                Ax.CFRelease(ev);
-            }
-            Thread.Sleep(4);
         }
     }
 }

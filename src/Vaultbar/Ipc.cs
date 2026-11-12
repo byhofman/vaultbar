@@ -2,21 +2,25 @@ using System.IO.Pipes;
 
 namespace Vaultbar;
 
-/// <summary>Single-instance channel: a second launch forwards its command to the running instance.</summary>
+/// <summary>
+/// Single-instance channel: a second launch forwards its command to the running instance. Both ends refuse a peer
+/// running as another user. On macOS and Linux the socket sits in a folder only the user can open, so another user
+/// can neither reach it nor take its name first.
+/// </summary>
 public static class Ipc
 {
-    private static string PipeName { get; } = "vaultbar-" + new string(Environment.UserName.Where(char.IsAsciiLetterOrDigit).ToArray())
-        + (Environment.GetEnvironmentVariable("VAULTBAR_CONFIG_DIR") is { Length: > 0 } d
-            ? "-" + Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(d)))[..8]
-            : "");
-
-    public static string MutexName => (OperatingSystem.IsWindows() ? @"Local\" : @"Global\") + PipeName;
+    internal static string Endpoint { get; } = OperatingSystem.IsWindows()
+        ? "vaultbar-" + new string(Environment.UserName.Where(char.IsAsciiLetterOrDigit).ToArray())
+          + (Environment.GetEnvironmentVariable("VAULTBAR_CONFIG_DIR") is { Length: > 0 } d
+              ? "-" + Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(d)))[..8]
+              : "")
+        : Path.Combine(Paths.RuntimeDir, "vaultbar.sock");
 
     public static bool TrySend(string command, int timeoutMs = 500)
     {
         try
         {
-            using var client = new NamedPipeClientStream(".", PipeName, PipeDirection.InOut, PipeOptions.CurrentUserOnly);
+            using var client = new NamedPipeClientStream(".", Endpoint, PipeDirection.InOut, PipeOptions.CurrentUserOnly);
             client.Connect(timeoutMs);
             using var writer = new StreamWriter(client, leaveOpen: true) { AutoFlush = true };
             using var reader = new StreamReader(client, leaveOpen: true);
@@ -30,18 +34,13 @@ public static class Ipc
         }
     }
 
+    /// <summary>Call only while holding <see cref="SingleInstance"/>: on macOS and Linux it replaces a socket left by a crash.</summary>
     public static void StartServer(Action<string> handler, CancellationToken ct)
     {
         if (!OperatingSystem.IsWindows())
         {
-            var stale = Path.Combine(Path.GetTempPath(), "CoreFxPipe_" + PipeName);
-            try
-            {
-                if (File.Exists(stale)) File.Delete(stale);
-            }
-            catch (IOException)
-            {
-            }
+            Paths.EnsurePrivate(Paths.RuntimeDir);
+            File.Delete(Endpoint);
         }
 
         _ = Task.Run(async () =>
@@ -50,7 +49,7 @@ public static class Ipc
             {
                 try
                 {
-                    await using var server = new NamedPipeServerStream(PipeName, PipeDirection.InOut, 1,
+                    await using var server = new NamedPipeServerStream(Endpoint, PipeDirection.InOut, 1,
                         PipeTransmissionMode.Byte, PipeOptions.Asynchronous | PipeOptions.CurrentUserOnly);
                     await server.WaitForConnectionAsync(ct);
                     using var reader = new StreamReader(server, leaveOpen: true);
@@ -65,7 +64,7 @@ public static class Ipc
                 }
                 catch (Exception ex)
                 {
-                    Log.Write($"ipc: {ex.Message}");
+                    Log.Write($"ipc: {Log.Shape(ex)}");
                     await Task.Delay(250, CancellationToken.None);
                 }
             }

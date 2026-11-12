@@ -90,7 +90,7 @@ internal sealed class LinuxPlatform : IPlatform
                 }
                 catch (Exception ex)
                 {
-                    Log.Write($"hotkey: {ex}");
+                    Log.Write($"hotkey: {Log.Shape(ex)}");
                 }
             }
             var pfd = new Libc.PollFd { Fd = fd, Events = 1 };
@@ -149,13 +149,13 @@ internal sealed class LinuxPlatform : IPlatform
         return target is null ? "no previous window to fill" : null;
     }
 
-    public async Task<bool> AutoTypeAsync(ForeignWindow? target, IReadOnlyList<TypeStep> steps, Action hideWindow)
+    public async Task<AutoTypeResult> AutoTypeAsync(ForeignWindow? target, IReadOnlyList<TypeStep> steps, Action hideWindow)
     {
         if (_wayland) return await WaylandTypeAsync(steps, hideWindow);
-        if (target is null) return false;
+        if (target is null) return AutoTypeResult.TargetNotFocused;
 
         var d = X11.XOpenDisplay(0);
-        if (d == 0) return false;
+        if (d == 0) return AutoTypeResult.TargetNotFocused;
         try
         {
             await Task.Run(() => X11.WaitForKeysReleased(d, 2000));
@@ -173,33 +173,17 @@ internal sealed class LinuxPlatform : IPlatform
             });
             if (!active)
             {
-                Log.Write($"autotype: window {target.Handle:x} did not become active");
-                return false;
+                Log.Write("autotype: the previous window did not become active");
+                return AutoTypeResult.TargetNotFocused;
             }
             await Task.Delay(80);
-            await Task.Run(() =>
+            return await Task.Run(() =>
             {
-                var typer = new X11.Typer(d);
-                foreach (var step in steps)
-                {
-                    switch (step)
-                    {
-                        case TypeText t:
-                            foreach (var rune in t.Text.EnumerateRunes()) typer.Type(rune);
-                            break;
-                        case TypeKey k:
-                            typer.Tap(k.Key == SpecialKey.Tab ? X11.XK_Tab : X11.XK_Return);
-                            break;
-                        case TypeDelay delay:
-                            Thread.Sleep(delay.Milliseconds);
-                            break;
-                    }
-                    Thread.Sleep(40);
-                }
-                typer.Dispose();
+                using var typer = new X11.Typer(d);
+                var result = AutoTyper.Run(steps, typer, () => X11.ActiveWindow(d) == (nuint)target.Handle);
                 if (typer.Skipped > 0) Log.Write($"autotype: {typer.Skipped} characters could not be typed on this keyboard layout");
+                return result;
             });
-            return true;
         }
         finally
         {
@@ -207,11 +191,12 @@ internal sealed class LinuxPlatform : IPlatform
         }
     }
 
-    private static async Task<bool> WaylandTypeAsync(IReadOnlyList<TypeStep> steps, Action hideWindow)
+    // Wayland lets no app see which window has focus, so unlike X11 nothing can stop typing when focus moves.
+    private static async Task<AutoTypeResult> WaylandTypeAsync(IReadOnlyList<TypeStep> steps, Action hideWindow)
     {
         var wtype = Which("wtype");
         var ydotool = wtype is null ? Which("ydotool") : null;
-        if (wtype is null && ydotool is null) return false;
+        if (wtype is null && ydotool is null) return AutoTypeResult.TargetNotFocused;
 
         hideWindow();
         await Task.Delay(300);
@@ -238,7 +223,7 @@ internal sealed class LinuxPlatform : IPlatform
             }
             await Task.Delay(40);
         }
-        return true;
+        return AutoTypeResult.Typed;
     }
 
     private static async Task RunAsync(string exe, string[] args, string? stdin)
@@ -272,28 +257,26 @@ internal sealed class LinuxPlatform : IPlatform
         }
         catch (Exception ex)
         {
-            Log.Write($"clipboard: {ex.Message}");
+            Log.Write($"clipboard: {Log.Shape(ex)}");
             await _clipboard.SetTextAsync(text);
         }
-        return text;
+        return new ClipboardFingerprint(text);
     }
 
     public async Task ClearClipboardAsync(object token)
     {
-        if (_clipboard is null || token is not string text) return;
-        if (await _clipboard.GetTextAsync() == text) await _clipboard.ClearAsync();
+        if (_clipboard is null || token is not ClipboardFingerprint fingerprint) return;
+        if (fingerprint.Matches(await _clipboard.GetTextAsync())) await _clipboard.ClearAsync();
     }
 
-    public void OpenUrl(string url)
+    public void OpenUrl(Vault.WebAddress address)
     {
         var psi = new ProcessStartInfo("xdg-open") { UseShellExecute = false };
-        psi.ArgumentList.Add(url);
+        psi.ArgumentList.Add(address.Value);
         Process.Start(psi)?.Dispose();
     }
 
-    public void WatchSystemLock(Action onLock)
-    {
-    }
+    public void WatchSystemLock(Action onLock) => _ = LinuxSessionLock.WatchAsync(onLock);
 
     public void Dispose()
     {
@@ -410,7 +393,7 @@ internal sealed class LinuxPlatform : IPlatform
         }
 
         /// <summary>Types arbitrary Unicode via XTest, borrowing an unused keycode for symbols not on the layout.</summary>
-        public sealed class Typer : IDisposable
+        public sealed class Typer : IKeyboard, IDisposable
         {
             private readonly nint d;
             private readonly byte _shift;
@@ -449,13 +432,13 @@ internal sealed class LinuxPlatform : IPlatform
                 _shift = _keys.TryGetValue(XK_Shift_L, out var s) ? s.Keycode : XKeysymToKeycode(d, XK_Shift_L);
             }
 
+            public void Press(SpecialKey key) => Tap(key == SpecialKey.Tab ? XK_Tab : XK_Return);
+
             public void Type(Rune rune)
             {
                 var v = rune.Value;
                 nuint keysym = v switch
                 {
-                    '\n' => XK_Return,
-                    '\t' => XK_Tab,
                     (>= 0x20 and <= 0x7e) or (>= 0xa0 and <= 0xff) => (nuint)v,
                     _ => (nuint)(0x01000000 | v),
                 };

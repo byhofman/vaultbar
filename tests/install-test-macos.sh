@@ -19,7 +19,9 @@ check() {
 stop() { "$exe" quit >/dev/null 2>&1; sleep 1; }
 trap 'stop; rm -rf "$sandbox"' EXIT
 
-zsh "$script" --archive "$archive" --dir "$apps" --no-start >/dev/null
+check "a wrong checksum is refused" zsh -c "! zsh '$script' --archive '$archive' --sha256 $(printf '0%.0s' {1..64}) --dir '$apps' --no-start"
+check "nothing is installed after a refused checksum" test ! -e "$apps/Vaultbar.app"
+zsh "$script" --archive "$archive" --sha256 "$(shasum -a 256 "$archive" | cut -d" " -f1)" --dir "$apps" --no-start >/dev/null
 check "install succeeds" test -x "$exe"
 check "bundle signature verifies" codesign --verify --deep --strict "$apps/Vaultbar.app"
 check "no quarantine left" zsh -c "! xattr -lr '$apps/Vaultbar.app' | grep -q com.apple.quarantine"
@@ -35,6 +37,7 @@ print '{ "dataPath": "'$sandbox'/none/data.json", "showFavicons": false }' > "$V
 "$link" background &!
 for i in {1..40}; do "$link" lock >/dev/null 2>&1 && break; sleep 0.25; done
 check "app starts and answers" "$link" lock
+check "its folders are private" zsh -c "[[ \$(stat -f %Lp '$VAULTBAR_CONFIG_DIR') == 700 && \$(stat -f %Lp '$VAULTBAR_CONFIG_DIR/cache') == 700 ]]"
 
 zsh "$script" --archive "$archive" --dir "$apps" --no-start >/dev/null
 check "update stops the running app" zsh -c "! '$link' lock"
@@ -47,6 +50,11 @@ check "uninstall removes the app" test ! -e "$apps/Vaultbar.app"
 check "uninstall removes the CLI link" test ! -L "$link"
 check "uninstall removes the login item" test ! -e "$plist"
 check "uninstall stops the app" zsh -c "! pgrep -x vaultbar"
+
+# The published release, so the digest check runs against what GitHub records for a real asset.
+check "a release download is verified and installs" zsh "$script" --dir "$sandbox/download" --no-start
+check "the downloaded app runs" "$sandbox/download/Vaultbar.app/Contents/MacOS/vaultbar" version
+zsh "$script" --uninstall --dir "$sandbox/download" >/dev/null
 
 print "$failures failed"
 exit $((failures > 0))

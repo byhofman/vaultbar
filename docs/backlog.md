@@ -12,6 +12,13 @@ IDs are permanent: never renumber or reuse one.
 - [ ] VBR-7 Manual macOS check with Accessibility granted and a real vault: auto-type into another app, physical hotkey, tray click, screen lock and sleep
 - [ ] VBR-8 Signed and notarized macOS dmg in the release, and a download page on the website (dmg and signing steps built; needs the Apple credentials, and the website has no pages yet)
 
+## Security
+
+- [x] VBR-9 Lock when the Linux session locks or the machine suspends
+- [x] VBR-10 Installers check each download against its SHA-256 digest, and releases carry build provenance
+- [x] VBR-11 Auto-type stops the moment another window takes focus
+- [x] VBR-12 Copied secrets never reach other devices or clipboard history, and are cleared on lock even with the timer off
+
 ## Later
 
 - [ ] VBR-5 Biometric unlock on Linux

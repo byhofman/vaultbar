@@ -78,7 +78,7 @@ public sealed class QuickUnlockStore(string path)
         }
         catch (IOException ex)
         {
-            Log.Write($"quick unlock: {ex.Message}");
+            Log.Write($"quick unlock: {Log.Shape(ex)}");
         }
     }
 
@@ -132,7 +132,7 @@ public sealed class QuickUnlockStore(string path)
         }
         catch (Exception ex)
         {
-            Log.Write($"quick unlock: {ex.Message}");
+            Log.Write($"quick unlock: {Log.Shape(ex)}");
             return null;
         }
     }

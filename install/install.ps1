@@ -5,11 +5,15 @@
     irm https://raw.githubusercontent.com/byhofman/vaultbar/main/install/install.ps1 | iex
 .EXAMPLE
     & ([scriptblock]::Create((irm https://raw.githubusercontent.com/byhofman/vaultbar/main/install/install.ps1))) -Uninstall
+.NOTES
+    A download is checked against the SHA-256 digest GitHub records for the release asset, and refused if it differs.
+    With -Archive, pass -Sha256 to check a file you downloaded yourself.
 #>
 param(
     [string]$Repo = 'byhofman/vaultbar',
     [string]$Version = 'latest',
     [string]$Archive,
+    [string]$Sha256,
     [string]$InstallDir = (Join-Path $env:LOCALAPPDATA 'Programs\Vaultbar'),
     [switch]$Uninstall,
     [switch]$NoAutostart,
@@ -58,10 +62,20 @@ $tmp = Join-Path ([IO.Path]::GetTempPath()) ("vaultbar-" + [guid]::NewGuid().ToS
 New-Item -ItemType Directory $tmp | Out-Null
 try {
     if (-not $Archive) {
-        $base = if ($Version -eq 'latest') { "https://github.com/$Repo/releases/latest/download" } else { "https://github.com/$Repo/releases/download/$Version" }
-        $Archive = Join-Path $tmp "vaultbar-$rid.zip"
-        Write-Host "Downloading $base/vaultbar-$rid.zip"
-        Invoke-WebRequest "$base/vaultbar-$rid.zip" -OutFile $Archive -UseBasicParsing
+        $asset = "vaultbar-$rid.zip"
+        $api = if ($Version -eq 'latest') { "https://api.github.com/repos/$Repo/releases/latest" } else { "https://api.github.com/repos/$Repo/releases/tags/$Version" }
+        try { $release = Invoke-RestMethod $api -UseBasicParsing }
+        catch { throw "Could not read the release from GitHub ($api). Try again later, or download it and use -Archive." }
+        $digest = ($release.assets | Where-Object name -EQ $asset | Select-Object -First 1).digest
+        if ($digest -notmatch '^sha256:([0-9a-f]{64})$') { throw "Release $Version has no $asset with a SHA-256 digest." }
+        $Sha256 = $Matches[1]
+        $Archive = Join-Path $tmp $asset
+        Write-Host "Downloading $asset ($($release.tag_name))"
+        Invoke-WebRequest "https://github.com/$Repo/releases/download/$($release.tag_name)/$asset" -OutFile $Archive -UseBasicParsing
+    }
+    if ($Sha256) {
+        $actual = (Get-FileHash $Archive -Algorithm SHA256).Hash
+        if ($actual -ne $Sha256) { throw "SHA-256 mismatch for ${Archive}: expected $Sha256, got $($actual.ToLowerInvariant()). Nothing was installed." }
     }
     Expand-Archive $Archive -DestinationPath "$tmp\x" -Force
 

@@ -30,10 +30,10 @@ internal sealed class RecordingPlatform(MacPlatform mac) : IPlatform
     // MacPlatform would open the system Accessibility dialog here, which is the owner's to answer.
     public string? AutoTypeUnavailableReason(ForeignWindow? target) => "test run: Accessibility not requested";
 
-    public Task<bool> AutoTypeAsync(ForeignWindow? target, IReadOnlyList<TypeStep> steps, Action hideWindow) => mac.AutoTypeAsync(target, steps, hideWindow);
+    public Task<AutoTypeResult> AutoTypeAsync(ForeignWindow? target, IReadOnlyList<TypeStep> steps, Action hideWindow) => mac.AutoTypeAsync(target, steps, hideWindow);
     public Task<object?> SetClipboardAsync(string text) => mac.SetClipboardAsync(text);
     public Task ClearClipboardAsync(object token) => mac.ClearClipboardAsync(token);
-    public void OpenUrl(string url) => Opened.Add(url);
+    public void OpenUrl(WebAddress address) => Opened.Add(address.Value);
     public void WatchSystemLock(Action onLock) => mac.WatchSystemLock(onLock);
     public void Dispose() => mac.Dispose();
 }
@@ -255,7 +255,7 @@ internal static class Program
         await UntilAsync(() => Rows.FirstOrDefault()?.Title == "GitHub");
         N.Chord('c', N.Command);
         Check("Cmd+C copies the password", await UntilAsync(() => Clipboard == "gh-Secr3t!pass"), $"toast: {Toast}");
-        Check("copied secret is marked concealed", N.PasteboardIsConcealed(Board));
+        Check("copied secret is marked concealed and transient", MacPlatform.ConcealedMarkers.All(type => N.PasteboardHasType(Board, type)));
         Check("copied secret clears after the configured time", await UntilAsync(() => Clipboard == "", 4000));
 
         N.Chord('c', N.Command | N.Shift);
@@ -323,7 +323,7 @@ internal static class Program
         Controller.Show(target);
         await UntilAsync(() => N.KeyWindow != 0 && N.FrontPid == Environment.ProcessId);
         var switched = await Platform.AutoTypeAsync(target, [], _window.Hide);
-        Check("auto-type switches back to the previous app", switched && N.FrontPid == target.Pid, $"target: {target.App}, front: {N.FrontName}");
+        Check("auto-type switches back to the previous app", switched == AutoTypeResult.Typed && N.FrontPid == target.Pid, $"target: {target.App}, front: {N.FrontName}");
     }
 
     private static async Task FocusAsync()

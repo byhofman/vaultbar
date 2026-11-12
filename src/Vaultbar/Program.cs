@@ -60,7 +60,7 @@ internal static class Program
         }
         catch (Exception ex)
         {
-            Log.Write($"fatal: {ex}");
+            Log.Write($"fatal: {Log.Shape(ex)}\n{ex.StackTrace}");
             AppController.Current?.ClearClipboardOnCrash();
             AttachConsole();
             Console.Error.WriteLine(ex.Message);
@@ -70,8 +70,8 @@ internal static class Program
 
     private static int Run(bool show)
     {
-        using var mutex = new Mutex(true, Ipc.MutexName, out var createdNew);
-        if (!createdNew)
+        using var instance = SingleInstance.TryAcquire();
+        if (instance is null)
         {
             Thread.Sleep(750);
             return Ipc.TrySend(show ? "show" : "ping") ? 0 : 1;

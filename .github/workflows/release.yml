@@ -7,22 +7,26 @@ on:
   pull_request:
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
   macos:
     runs-on: macos-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
-      - uses: actions/setup-dotnet@v4
+      - uses: actions/setup-dotnet@0f4a354dd5547a28c70b7853dbd95d5b67886e73 # v6.1.0
         with:
           dotnet-version: '10.0.x'
 
       - name: Test
-        run: dotnet test vaultbar.slnx -c Release
+        run: dotnet test vaultbar.slnx -c Release -p:RestoreLockedMode=true
 
       - name: End to end
+        env:
+          E2E_OUT: ${{ runner.temp }}/screens-macos
         run: tests/e2e-macos/run.sh
 
       - name: Build
@@ -31,15 +35,15 @@ jobs:
           $version = if ($env:GITHUB_REF_TYPE -eq 'tag') { $env:GITHUB_REF_NAME.TrimStart('v') } else { '0.0.0' }
           ./build.ps1 -Runtime osx-arm64,osx-x64 -Version $version
 
+      # Only a release gets the signing secrets; every other run proves the packaging with an ad-hoc signature.
       - name: Package
         env:
-          # Only a release signs and notarizes; every other run proves the packaging with an ad-hoc signature.
           APPLE_CERTIFICATE_P12: ${{ github.ref_type == 'tag' && secrets.APPLE_CERTIFICATE_P12 || '' }}
-          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
-          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
-          APPLE_ID: ${{ secrets.APPLE_ID }}
-          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
-          APPLE_APP_PASSWORD: ${{ secrets.APPLE_APP_PASSWORD }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ github.ref_type == 'tag' && secrets.APPLE_CERTIFICATE_PASSWORD || '' }}
+          APPLE_SIGNING_IDENTITY: ${{ github.ref_type == 'tag' && secrets.APPLE_SIGNING_IDENTITY || '' }}
+          APPLE_ID: ${{ github.ref_type == 'tag' && secrets.APPLE_ID || '' }}
+          APPLE_TEAM_ID: ${{ github.ref_type == 'tag' && secrets.APPLE_TEAM_ID || '' }}
+          APPLE_APP_PASSWORD: ${{ github.ref_type == 'tag' && secrets.APPLE_APP_PASSWORD || '' }}
         run: packaging/macos/package.sh dist osx-arm64 osx-x64
 
       - name: Disk image
@@ -48,24 +52,33 @@ jobs:
       - name: Installer
         run: tests/install-test-macos.sh dist/vaultbar-osx-arm64.tar.gz
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: vaultbar-macos
           path: |
             dist/*.tar.gz
             dist/*.dmg
 
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: always()
+        with:
+          name: screens-macos
+          path: ${{ runner.temp }}/screens-macos
+          if-no-files-found: ignore
+
   build:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
-      - uses: actions/setup-dotnet@v4
+      - uses: actions/setup-dotnet@0f4a354dd5547a28c70b7853dbd95d5b67886e73 # v6.1.0
         with:
           dotnet-version: '10.0.x'
 
       - name: Test
-        run: dotnet test vaultbar.slnx -c Release
+        run: dotnet test vaultbar.slnx -c Release -p:RestoreLockedMode=true
 
       - name: Build
         shell: pwsh
@@ -73,22 +86,79 @@ jobs:
           $version = if ($env:GITHUB_REF_TYPE -eq 'tag') { $env:GITHUB_REF_NAME.TrimStart('v') } else { '0.0.0' }
           ./build.ps1 -Version $version
 
-      - uses: actions/upload-artifact@v4
+      - name: Linux end to end
+        shell: pwsh
+        run: tests/e2e-linux/run.ps1 -DockerContext ''
+
+      - name: Linux installer
+        run: docker run --rm -v "$PWD:/w" "$(cat tests/linux-image)" bash /w/tests/install-test.sh
+
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: vaultbar-windows-linux
           path: |
             dist/*.zip
             dist/*.tar.gz
 
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: always()
+        with:
+          name: screens-linux
+          path: dist/e2e
+          if-no-files-found: ignore
+
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-dotnet@0f4a354dd5547a28c70b7853dbd95d5b67886e73 # v6.1.0
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Test
+        run: dotnet test vaultbar.slnx -c Release -p:RestoreLockedMode=true
+
+      # Against the published release, so the digest check runs on what GitHub records for a real asset.
+      - name: Installer
+        shell: pwsh
+        run: |
+          $dir = Join-Path $env:RUNNER_TEMP vaultbar
+          $options = @{ InstallDir = $dir; NoAutostart = $true; NoPath = $true; NoStart = $true; NoShortcut = $true }
+          ./install/install.ps1 @options
+          if (-not (Test-Path "$dir/vaultbar.exe")) { throw 'the release download did not install' }
+          $zip = Join-Path $env:RUNNER_TEMP 'vaultbar-win-x64.zip'
+          Compress-Archive "$dir/vaultbar.exe" $zip
+          $refused = $false
+          try { ./install/install.ps1 @options -Archive $zip -Sha256 ('0' * 64) } catch { $refused = $true }
+          if (-not $refused) { throw 'a wrong checksum was accepted' }
+          ./install/install.ps1 @options -Archive $zip -Sha256 (Get-FileHash $zip).Hash
+          ./install/install.ps1 -InstallDir $dir -Uninstall
+
   release:
     if: github.ref_type == 'tag'
-    needs: [macos, build]
+    needs: [macos, build, windows]
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      id-token: write
+      attestations: write
     steps:
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
+          pattern: vaultbar-*
           path: dist
           merge-multiple: true
+
+      # Build provenance, verifiable with `gh attestation verify <file> --repo byhofman/vaultbar`.
+      - uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
+        with:
+          subject-path: |
+            dist/*.zip
+            dist/*.tar.gz
+            dist/*.dmg
 
       - name: Release
         env:

@@ -153,18 +153,25 @@ public sealed class DetailRow : Observable
         catch (Exception ex)
         {
             Display = "(cannot decrypt)";
-            Log.Write($"field {_field.Label}: {ex.Message}");
+            Log.Write($"field: {Log.Shape(ex)}");
         }
     }
 }
 
 public sealed class FaviconService
 {
-    private readonly HttpClient _http = new() { Timeout = TimeSpan.FromSeconds(8) };
-    private readonly ConcurrentDictionary<string, Task<Bitmap?>> _cache = new();
-    private readonly string _dir = Path.Combine(Paths.CacheDir, "icons");
+    private const int MaxIconBytes = 256 * 1024;
 
-    public FaviconService() => _http.DefaultRequestHeaders.UserAgent.ParseAdd("vaultbar/0.1");
+    private readonly HttpClient _http = new() { Timeout = TimeSpan.FromSeconds(8), MaxResponseContentBufferSize = MaxIconBytes };
+
+    // Only in memory: a folder of icons named after each website would tell anyone reading the disk where you have accounts.
+    private readonly ConcurrentDictionary<string, Task<Bitmap?>> _cache = new();
+
+    public FaviconService()
+    {
+        _http.DefaultRequestHeaders.UserAgent.ParseAdd("vaultbar");
+        RemoveDiskCacheOfOlderVersions();
+    }
 
     public string BaseUrl { get; set; } = "https://icons.bitwarden.net";
 
@@ -174,33 +181,29 @@ public sealed class FaviconService
     {
         if (host.Length > 253 || host.Any(c => !(char.IsAsciiLetterOrDigit(c) || c is '.' or '-')) || !VaultItem.IsPublicHost(host)) return null;
         if (!BaseUrl.StartsWith("https://", StringComparison.OrdinalIgnoreCase)) return null;
-        var file = Path.Combine(_dir, host + ".png");
-        var miss = file + ".miss";
         try
         {
-            if (File.Exists(file) && DateTime.UtcNow - File.GetLastWriteTimeUtc(file) < TimeSpan.FromDays(30))
-                return new Bitmap(file);
-            if (File.Exists(miss) && DateTime.UtcNow - File.GetLastWriteTimeUtc(miss) < TimeSpan.FromDays(7))
-                return null;
-
             var bytes = await _http.GetByteArrayAsync($"{BaseUrl}/{host}/icon.png");
             using var ms = new MemoryStream(bytes);
-            var bitmap = new Bitmap(ms);
-            Directory.CreateDirectory(_dir);
-            await File.WriteAllBytesAsync(file, bytes);
-            return bitmap;
+            return new Bitmap(ms);
         }
-        catch
+        catch (Exception)
         {
-            try
-            {
-                Directory.CreateDirectory(_dir);
-                await File.WriteAllTextAsync(miss, "");
-            }
-            catch (IOException)
-            {
-            }
+            // Any failure, from the network or the image decoder, leaves the row with its letter tile.
             return null;
+        }
+    }
+
+    private static void RemoveDiskCacheOfOlderVersions()
+    {
+        try
+        {
+            var dir = Path.Combine(Paths.CacheDir, "icons");
+            if (Directory.Exists(dir)) Directory.Delete(dir, recursive: true);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            Log.Write($"icon cache: {Log.Shape(ex)}");
         }
     }
 }
