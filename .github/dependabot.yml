@@ -1,9 +1,14 @@
+# Patches and minor versions arrive grouped; a major version (Avalonia 12, the .NET 11 packages) is a migration to plan,
+# not a weekly bump.
 version: 2
 updates:
   - package-ecosystem: nuget
     directory: /
     schedule:
       interval: weekly
+    ignore:
+      - dependency-name: '*'
+        update-types: ['version-update:semver-major']
     groups:
       nuget:
         patterns: ['*']
