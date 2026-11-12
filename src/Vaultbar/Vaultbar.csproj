@@ -8,7 +8,6 @@
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <AssemblyName>vaultbar</AssemblyName>
     <RootNamespace>Vaultbar</RootNamespace>
-    <Version>0.2.0</Version>
     <Product>Vaultbar</Product>
     <Description>Quick search bar for Bitwarden</Description>
     <Authors>Thomas Hofman</Authors>

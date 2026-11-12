@@ -409,7 +409,8 @@ public partial class QuickWindow : Window
                 if (item != null) _ = OpenDetailsAsync(item);
                 return true;
             case Key.Enter when item != null:
-                if (primary) OpenUrl(item);
+                // Alt+Enter is 1Password's "open the website"; Ctrl+Enter is the Bitwarden-style one.
+                if (primary || alt) OpenUrl(item);
                 else if (shift) _ = FillAsync(item, passwordOnly: true);
                 else _ = DefaultActionAsync(item);
                 return true;
@@ -420,10 +421,10 @@ public partial class QuickWindow : Window
                 _ = CopyAsync(item, item.WebsiteCopy);
                 return true;
             case Key.U when primary && item != null:
-                _ = CopyAsync(item, item.Type == ItemType.Login ? item.SecondaryCopy : null);
+                _ = CopyAsync(item, item.UsernameCopy);
                 return true;
             case Key.P when primary && item != null:
-                _ = CopyAsync(item, item.Type == ItemType.Login ? item.PrimaryCopy : null);
+                _ = CopyAsync(item, item.PasswordCopy);
                 return true;
             case Key.T when primary && item != null:
                 _ = CopyAsync(item, item.TotpCopy);
@@ -693,33 +694,34 @@ public partial class QuickWindow : Window
     private void ShowHelp()
     {
         _modeBeforeHelp = _mode;
-        var mod = OperatingSystem.IsMacOS() ? "⌘" : "Ctrl";
-        var opt = OperatingSystem.IsMacOS() ? "⌥" : "Alt";
-        var shift = OperatingSystem.IsMacOS() ? "⇧" : "Shift";
+        var (mod, opt, shift) = (KeyCaps.Primary, KeyCaps.Option, KeyCaps.Shift);
         (string[] Keys, string Label)[] rows =
         [
             (["Enter"], "Fill login · copy note · open details"),
             ([shift, "Enter"], "Fill password only"),
-            ([mod, "C"], "Copy password, card number or note"),
-            ([mod, shift, "C"], "Copy username or security code"),
+            ([mod, "C"], "Copy username, card number or note"),
+            ([mod, shift, "C"], "Copy password or security code"),
             ([mod, opt, "C"], "Copy one-time code"),
+            ([mod, "P"], "Copy password, as in Bitwarden"),
+            ([mod, "U"], "Copy username, as in Bitwarden"),
+            ([mod, "T"], "Copy one-time code, as in Bitwarden"),
             ([mod, shift, "U"], "Copy website"),
-            ([mod, "O"], "Open website"),
+            ([mod, "O"], $"Open website (also {mod} Enter, {opt} Enter)"),
             ([mod, shift, "O"], "Open in Bitwarden web vault"),
             (["Tab"], "Item details"),
             (["Space"], "Reveal hidden field (details)"),
             ([mod, "L"], "Lock"),
+            ([mod, "W"], "Close"),
             (["Esc"], "Back, clear search, close"),
-            (["F1"], "Keyboard shortcuts"),
+            (["F1"], $"Keyboard shortcuts (also {mod} /)"),
         ];
 
         HelpList.Children.Clear();
         foreach (var (keys, label) in rows)
         {
             var line = new DockPanel { Margin = new Thickness(0, 2) };
-            var group = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 3, Width = 128 };
-            foreach (var k in keys)
-                group.Children.Add(new Border { Classes = { "kbd" }, Child = new TextBlock { Text = k } });
+            var group = KeyCaps.Draw(keys);
+            group.Width = 128;
             line.Children.Add(group);
             line.Children.Add(new TextBlock { Text = label, Classes = { "hint" }, VerticalAlignment = VerticalAlignment.Center });
             HelpList.Children.Add(line);
@@ -882,9 +884,7 @@ public partial class QuickWindow : Window
 
     private void UpdateHints()
     {
-        var mod = OperatingSystem.IsMacOS() ? "⌘" : "Ctrl";
-        var opt = OperatingSystem.IsMacOS() ? "⌥" : "Alt";
-        var shift = OperatingSystem.IsMacOS() ? "⇧" : "Shift";
+        var (mod, opt, shift) = (KeyCaps.Primary, KeyCaps.Option, KeyCaps.Shift);
         var hints = new List<(string[] Keys, string Label)>();
         var item = SelectedItem;
 
@@ -907,8 +907,8 @@ public partial class QuickWindow : Window
                 {
                     case ItemType.Login:
                         hints.Add((["Enter"], "Fill"));
-                        if (item.HasPassword) hints.Add(([mod, "C"], "Password"));
-                        if (item.Username.Length > 0) hints.Add(([mod, shift, "C"], "Username"));
+                        if (item.Username.Length > 0) hints.Add(([mod, "C"], "Username"));
+                        if (item.HasPassword) hints.Add(([mod, shift, "C"], "Password"));
                         if (item.HasTotp) hints.Add(([mod, opt, "C"], "Code"));
                         break;
                     case ItemType.SecureNote:
@@ -941,9 +941,7 @@ public partial class QuickWindow : Window
         Hints.Children.Clear();
         foreach (var (keys, label) in hints)
         {
-            var group = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 3 };
-            foreach (var k in keys)
-                group.Children.Add(new Border { Classes = { "kbd" }, Child = new TextBlock { Text = k } });
+            var group = KeyCaps.Draw(keys);
             group.Children.Add(new TextBlock { Text = label, Classes = { "hint" }, Margin = new Thickness(4, 0, 0, 0) });
             Hints.Children.Add(group);
         }

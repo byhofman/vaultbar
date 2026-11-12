@@ -93,7 +93,7 @@
                     <Grid ColumnDefinitions="*,Auto">
                       <StackPanel Spacing="1">
                         <TextBlock Text="{Binding Label}" FontSize="11.5" Foreground="{DynamicResource BqMuted}" />
-                        <TextBlock Text="{Binding Display}" FontSize="14" FontFamily="{Binding ValueFont}" Foreground="{DynamicResource BqText}"
+                        <TextBlock Text="{Binding Display}" FontSize="14" Classes.mono="{Binding IsMonospaced}" Foreground="{DynamicResource BqText}"
                                    TextWrapping="Wrap" MaxLines="6" TextTrimming="CharacterEllipsis" />
                       </StackPanel>
                       <TextBlock Grid.Column="1" Text="{Binding Countdown}" IsVisible="{Binding IsTotp}" Classes="hint" Margin="8,0,0,0" />

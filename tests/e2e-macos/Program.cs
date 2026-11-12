@@ -203,13 +203,13 @@ internal static class Program
     {
         N.Type("github");
         await UntilAsync(() => Rows.FirstOrDefault()?.Title == "GitHub");
-        N.Chord('c', N.Command);
-        Check("Cmd+C copies the password", await UntilAsync(() => Clipboard == "gh-Secr3t!pass"), $"toast: {Toast}");
+        N.Chord('c', N.Command | N.Shift);
+        Check("Cmd+Shift+C copies the password, as in 1Password", await UntilAsync(() => Clipboard == "gh-Secr3t!pass"), $"toast: {Toast}");
         Check("copied secret is marked concealed and transient", MacPlatform.ConcealedMarkers.All(type => N.PasteboardHasType(Board, type)));
         Check("copied secret clears after the configured time", await UntilAsync(() => Clipboard == "", 4000));
 
-        N.Chord('c', N.Command | N.Shift);
-        Check("Cmd+Shift+C copies the username", await UntilAsync(() => Clipboard == "alex-example"), Clipboard);
+        N.Chord('c', N.Command);
+        Check("Cmd+C copies the username, as in 1Password", await UntilAsync(() => Clipboard == "alex-example"), Clipboard);
         N.Chord('c', N.Command | N.Option);
         Check("Cmd+Option+C copies the one-time code", await UntilAsync(() => Clipboard.Length == 6 && Clipboard.All(char.IsAsciiDigit)), Clipboard);
         N.Chord('p', N.Command);

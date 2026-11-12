@@ -17,8 +17,10 @@ public sealed class UsageStore
                 ? JsonSerializer.Deserialize(File.ReadAllText(_path), JsonCtx.Default.DictionaryStringUsageEntry) ?? new()
                 : new();
         }
-        catch
+        catch (Exception ex) when (ex is JsonException or IOException or UnauthorizedAccessException)
         {
+            // Usage only ranks results; a damaged file starts the ranking over.
+            Log.Write($"usage load: {Log.Shape(ex)}");
             _entries = new();
         }
     }
@@ -63,7 +65,7 @@ public sealed class UsageStore
             Paths.EnsurePrivate(Paths.ConfigDir);
             File.WriteAllText(_path, json);
         }
-        catch (Exception ex)
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
             Log.Write($"usage save: {Log.Shape(ex)}");
         }

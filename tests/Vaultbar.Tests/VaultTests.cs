@@ -55,6 +55,20 @@ public class VaultTests : IDisposable
     }
 
     [Fact]
+    public async Task CopyKeys_FollowOnePasswordQuickAccess()
+    {
+        using var vault = await UnlockedDemo();
+        var azure = vault.Items.Single(i => i.Name == "Azure Portal");
+
+        Assert.Equal(azure.Username, azure.PrimaryCopy!.Value());
+        Assert.False(azure.PrimaryCopy.Sensitive);
+        Assert.Equal("Azure#2026", azure.SecondaryCopy!.Value());
+        Assert.True(azure.SecondaryCopy.Sensitive);
+        Assert.Equal("Azure#2026", azure.PasswordCopy!.Value());
+        Assert.Equal(azure.Username, azure.UsernameCopy!.Value());
+    }
+
+    [Fact]
     public async Task Lock_ClearsItems_AndVerifyChecksMasterPassword()
     {
         var vault = await UnlockedDemo();

@@ -8,8 +8,8 @@ param(
 $ErrorActionPreference = 'Stop'
 $root = $PSScriptRoot
 $dist = Join-Path $root 'dist'
-[xml]$proj = Get-Content "$root/src/Vaultbar/Vaultbar.csproj"
-if (-not $Version) { $Version = $proj.Project.PropertyGroup.Version | Select-Object -First 1 }
+# The tag is the version: CI passes it, a local build is 0.0.0.
+if (-not $Version) { $Version = '0.0.0' }
 
 function New-Icns([string]$Path) {
     $chunks = [ordered]@{ ic11 = 32; ic12 = 64; ic07 = 128; ic13 = 256; ic08 = 256; ic14 = 512; ic09 = 512; ic10 = 1024 }

@@ -113,6 +113,9 @@
       <Setter Property="Foreground" Value="{DynamicResource BqMuted}" />
       <Setter Property="VerticalAlignment" Value="Center" />
     </Style>
+    <Style Selector="TextBlock.mono">
+      <Setter Property="FontFamily" Value="Cascadia Mono, Consolas, Menlo, DejaVu Sans Mono, monospace" />
+    </Style>
     <Style Selector="TextBlock.hint.toast">
       <Setter Property="Foreground" Value="{DynamicResource BqAccent}" />
       <Setter Property="FontWeight" Value="SemiBold" />

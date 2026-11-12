@@ -1,4 +1,3 @@
-using Avalonia.Media;
 using Vaultbar.Vault;
 
 namespace Vaultbar.UI;
@@ -23,7 +22,8 @@ public sealed class DetailRow : Observable
     public bool IsSecret => _field.Kind == FieldKind.Secret;
     public bool IsTotp => _field.Kind == FieldKind.Totp;
     public bool IsMultiline => _field.Kind == FieldKind.Multiline;
-    public FontFamily ValueFont => IsSecret && _revealed || IsTotp ? new FontFamily("Cascadia Mono, Consolas, Menlo, DejaVu Sans Mono, monospace") : FontFamily.Default;
+    /// <summary>Revealed secrets and codes read character by character, so they get a monospaced font.</summary>
+    public bool IsMonospaced => IsSecret && _revealed || IsTotp;
 
     public string Display
     {
@@ -48,7 +48,7 @@ public sealed class DetailRow : Observable
         get => _revealed;
         set
         {
-            Set(ref _revealed, value, also: [nameof(ValueFont)]);
+            Set(ref _revealed, value, also: [nameof(IsMonospaced)]);
             Refresh();
         }
     }
