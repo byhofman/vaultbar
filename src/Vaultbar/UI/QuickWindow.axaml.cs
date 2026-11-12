@@ -168,7 +168,7 @@ public partial class QuickWindow : Window
                 break;
             case VaultState.Error:
                 SetMode(Mode.Message);
-                ShowMessage("Cannot read your vault", vault.Error ?? "Unknown error");
+                ShowMessage("Cannot read your vault", VaultErrorText.For(vault.Error ?? VaultError.Unreadable));
                 break;
             default:
                 SetMode(Mode.Message);
@@ -743,7 +743,7 @@ public partial class QuickWindow : Window
         var (_, error) = await _app.Vault.QuickUnlockAsync();
         BringBack();
         UpdateMode();
-        if (error != null) ShowError(error);
+        if (error is { } code) ShowError(VaultErrorText.For(code, _app.Vault.QuickUnlock?.Name));
         FocusInput();
     }
 
@@ -806,7 +806,7 @@ public partial class QuickWindow : Window
         if (error != null)
         {
             UpdateMode();
-            ShowError(error);
+            ShowError(VaultErrorText.For(error.Value));
             FocusInput();
             return;
         }
@@ -826,7 +826,7 @@ public partial class QuickWindow : Window
         if (!ok)
         {
             SetMode(Mode.Reprompt);
-            ShowError("Invalid master password.");
+            ShowError(VaultErrorText.For(VaultError.WrongPassword));
             FocusInput();
             return;
         }

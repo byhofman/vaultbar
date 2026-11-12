@@ -116,7 +116,7 @@ public sealed class V2KeyTests : IDisposable
         VaultFixture.V2().Write(DataPath, Password);
         using var vault = new VaultService(new Config { DataPath = DataPath });
         vault.Probe();
-        Assert.Equal("Invalid master password.", await vault.UnlockAsync("wrong"));
+        Assert.Equal(VaultError.WrongPassword, await vault.UnlockAsync("wrong"));
     }
 
     [Fact]

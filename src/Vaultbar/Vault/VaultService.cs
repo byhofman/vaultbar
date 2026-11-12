@@ -40,7 +40,7 @@ public sealed class VaultService : IDisposable
     public VaultState State { get; private set; } = VaultState.NotFound;
     public string? StorePath { get; private set; }
     public string Email { get; private set; } = "";
-    public string? Error { get; private set; }
+    public VaultError? Error { get; private set; }
     public IReadOnlyList<VaultItem> Items { get; private set; } = [];
     public int FailedItems { get; private set; }
     public DateTimeOffset? LastSync { get; private set; }
@@ -74,32 +74,27 @@ public sealed class VaultService : IDisposable
         catch (Exception ex)
         {
             State = VaultState.Error;
-            Error = ex is StoreException ? ex.Message : "Could not read the Bitwarden data. The details are in vaultbar.log.";
+            Error = ErrorOf(ex);
             Log.Write($"probe: {Log.Shape(ex)}");
         }
     }
 
-    /// <returns>An error message, or null on success.</returns>
-    public async Task<string?> UnlockAsync(string password)
+    /// <returns>Why the vault did not unlock, or null on success.</returns>
+    public async Task<VaultError?> UnlockAsync(string password)
     {
-        if (StorePath is null) return "Bitwarden desktop data not found.";
+        if (StorePath is null) return VaultError.DataNotFound;
         try
         {
             var snapshot = await Task.Run(() => DesktopStore.Read(StorePath));
             var userKeyBytes = await Task.Run(() => UnwrapWithPassword(password, snapshot));
-            if (userKeyBytes is null) return "Invalid master password.";
+            if (userKeyBytes is null) return VaultError.WrongPassword;
             Open(snapshot, userKeyBytes);
             return null;
-        }
-        catch (NotSupportedException ex)
-        {
-            Log.Write($"unlock: {Log.Shape(ex)}");
-            return ex.Message;
         }
         catch (Exception ex)
         {
             Log.Write($"unlock: {Log.Shape(ex)}");
-            return ex is StoreException ? ex.Message : "Unlock failed. The details are in vaultbar.log.";
+            return ErrorOf(ex);
         }
     }
 
@@ -120,7 +115,7 @@ public sealed class VaultService : IDisposable
     public async Task<bool> ShouldOfferQuickUnlockAsync() =>
         State == VaultState.Unlocked && QuickUnlockSetting == QuickUnlockSetting.NotSetUp && await QuickUnlock!.IsAvailableAsync();
 
-    public async Task<(QuickUnlockStatus Status, string? Error)> QuickUnlockAsync()
+    public async Task<(QuickUnlockStatus Status, VaultError? Error)> QuickUnlockAsync()
     {
         var provider = QuickUnlock;
         if (provider is null || StorePath is null) return (QuickUnlockStatus.Unavailable, null);
@@ -142,7 +137,7 @@ public sealed class VaultService : IDisposable
             {
                 Log.Write($"quick unlock: {Log.Shape(ex)}");
                 _quickStore.Delete();
-                return (QuickUnlockStatus.Failed, $"{provider.Name} no longer matches this vault. Enter your master password to set it up again.");
+                return (QuickUnlockStatus.Failed, VaultError.QuickUnlockMismatch);
             }
             finally
             {
@@ -155,9 +150,16 @@ public sealed class VaultService : IDisposable
         catch (Exception ex)
         {
             Log.Write($"quick unlock: {Log.Shape(ex)}");
-            return (QuickUnlockStatus.Failed, ex is StoreException ? ex.Message : $"{provider.Name} unlock failed. The details are in vaultbar.log.");
+            return (QuickUnlockStatus.Failed, ErrorOf(ex));
         }
     }
+
+    private static VaultError ErrorOf(Exception ex) => ex switch
+    {
+        StoreException store => store.Error,
+        NotSupportedException => VaultError.KeyFormatUnsupported,
+        _ => VaultError.Unreadable,
+    };
 
     public async Task<QuickUnlockStatus> SetUpQuickUnlockAsync()
     {
@@ -335,7 +337,7 @@ public sealed class VaultService : IDisposable
             return EncString.DecryptBytes(wrapped, raw);
         }
         if (type != 2)
-            throw new NotSupportedException($"This account uses a key format (type {type}) Vaultbar does not support yet.");
+            throw new NotSupportedException($"Key format type {type}");
         using var stretched = MasterKey.Stretch(masterKey);
         return EncString.DecryptBytes(wrapped, stretched);
     }

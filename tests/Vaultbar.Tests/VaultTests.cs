@@ -31,7 +31,7 @@ public class VaultTests : IDisposable
         var vault = new VaultService(new Config { DataPath = DataPath });
         vault.Probe();
         Assert.Equal(VaultFixture.Email, vault.Email);
-        Assert.Equal("Invalid master password.", await vault.UnlockAsync("wrong"));
+        Assert.Equal(VaultError.WrongPassword, await vault.UnlockAsync("wrong"));
         Assert.Equal(VaultState.Locked, vault.State);
     }
 
@@ -145,7 +145,7 @@ public class VaultTests : IDisposable
         var vault = new VaultService(new Config { DataPath = DataPath });
         vault.Probe();
         Assert.Equal(VaultState.Error, vault.State);
-        Assert.Contains("KDF", vault.Error);
+        Assert.Equal(VaultError.KdfOutOfRange, vault.Error);
     }
 
     [Fact]
