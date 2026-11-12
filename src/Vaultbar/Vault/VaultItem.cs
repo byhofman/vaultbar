@@ -5,28 +5,6 @@ using static Vaultbar.Vault.DesktopStore;
 
 namespace Vaultbar.Vault;
 
-public enum ItemType
-{
-    Login = 1,
-    SecureNote = 2,
-    Card = 3,
-    Identity = 4,
-    SshKey = 5,
-}
-
-public enum FieldKind
-{
-    Text,
-    Secret,
-    Totp,
-    Url,
-    Multiline,
-}
-
-public sealed record ItemField(string Label, FieldKind Kind, Func<string?> Value, Func<Totp.Code?>? TotpCode = null);
-
-public sealed record CopyAction(string Label, Func<string?> Value, bool Sensitive);
-
 /// <summary>
 /// A vault item whose searchable fields (name, username, URIs) are decrypted up front.
 /// Secrets stay encrypted until an action asks for them.
@@ -140,9 +118,14 @@ public sealed class VaultItem
         return secret is null ? null : Totp.Generate(secret, DateTimeOffset.UtcNow).Value;
     }
 
+    public CopyAction? PasswordCopy => Type == ItemType.Login && HasPassword ? new("Password", () => Password, true) : null;
+
+    public CopyAction? UsernameCopy => Type is ItemType.Login or ItemType.Identity && Username.Length > 0 ? new("Username", () => Username, false) : null;
+
+    /// <summary>Ctrl+C: as in 1Password Quick Access, the username or the item's main field.</summary>
     public CopyAction? PrimaryCopy => Type switch
     {
-        ItemType.Login when HasPassword => new("Password", () => Password, true),
+        ItemType.Login => UsernameCopy,
         ItemType.Card => new("Card number", () => D(Card?["number"]), true),
         ItemType.SecureNote => new("Note", () => Notes, true),
         ItemType.SshKey => new("Public key", () => D(Ssh?["publicKey"]), false),
@@ -150,12 +133,13 @@ public sealed class VaultItem
         _ => null,
     };
 
+    /// <summary>Ctrl+Shift+C: as in 1Password Quick Access, the password or the item's other secret.</summary>
     public CopyAction? SecondaryCopy => Type switch
     {
-        ItemType.Login when Username.Length > 0 => new("Username", () => Username, false),
+        ItemType.Login => PasswordCopy,
         ItemType.Card => new("Security code", () => D(Card?["code"]), true),
         ItemType.SshKey => new("Private key", () => D(Ssh?["privateKey"]), true),
-        ItemType.Identity when Username.Length > 0 => new("Username", () => Username, false),
+        ItemType.Identity => UsernameCopy,
         _ => null,
     };
 

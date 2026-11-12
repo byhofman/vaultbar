@@ -1,17 +1,8 @@
 using System.Formats.Cbor;
 using System.Numerics;
 using System.Security.Cryptography;
-using System.Text;
 
 namespace Vaultbar.Vault;
-
-public enum KeyAlgorithm
-{
-    AesCbc,
-    AesCbcHmac,
-    XChaCha20Poly1305,
-    XAes256Gcm,
-}
 
 /// <summary>
 /// Bitwarden's "v2" keys and type 7 EncStrings: COSE_Key and COSE_Encrypt0, as written by bitwarden/sdk-internal

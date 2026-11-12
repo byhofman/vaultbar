@@ -3,28 +3,6 @@ using System.Text.Json.Nodes;
 
 namespace Vaultbar.Vault;
 
-public sealed class StoreException(string message) : Exception(message);
-
-public sealed class StoreSnapshot
-{
-    public required string Path { get; init; }
-    public required string UserId { get; init; }
-    public required string Email { get; init; }
-    public required string Salt { get; init; }
-    public required KdfConfig Kdf { get; init; }
-    public required string WrappedUserKey { get; init; }
-    public string? EncPrivateKey { get; init; }
-    public Dictionary<string, string> OrgKeys { get; init; } = new();
-    public JsonObject Ciphers { get; init; } = new();
-    public JsonObject Folders { get; init; } = new();
-    public DateTimeOffset? LastSync { get; init; }
-    public bool ShowFavicons { get; init; } = true;
-    public string IconsBaseUrl { get; init; } = "https://icons.bitwarden.net";
-    public string WebVaultUrl { get; init; } = "https://vault.bitwarden.com";
-    public string? VaultTimeout { get; init; }
-    public string ContentHash { get; init; } = "";
-}
-
 /// <summary>Reads the Bitwarden desktop app's local (encrypted) state file.</summary>
 public static class DesktopStore
 {
@@ -73,7 +51,7 @@ public static class DesktopStore
             try
             {
                 using var fs = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
-                var root = JsonNode.Parse(fs) as JsonObject ?? throw new StoreException("Bitwarden data file is empty.");
+                var root = JsonNode.Parse(fs) as JsonObject ?? throw new StoreException(VaultError.DataEmpty);
                 return Parse(root, path);
             }
             catch (Exception ex) when (attempt < 5 && ex is JsonException or IOException)
@@ -87,7 +65,7 @@ public static class DesktopStore
     private static StoreSnapshot Parse(JsonObject root, string path)
     {
         var uid = Str(root["global_account_activeAccountId"])
-                  ?? throw new StoreException("No account found. Log in to the Bitwarden desktop app once.");
+                  ?? throw new StoreException(VaultError.NoAccount);
         var email = Str(root["global_account_accounts"]?[uid]?["email"]) ?? "";
         JsonNode? U(string key) => root[$"user_{uid}_{key}"];
 
@@ -108,7 +86,7 @@ public static class DesktopStore
         }
         else
         {
-            throw new StoreException("This account has no master-password unlock data (logged out, or SSO/key-connector only).");
+            throw new StoreException(VaultError.NoMasterPassword);
         }
 
         var crypto = U("crypto_accountCryptographicState");
@@ -159,16 +137,16 @@ public static class DesktopStore
 
     private static KdfConfig ParseKdf(JsonNode? n)
     {
-        if (n is null) throw new StoreException("KDF settings missing from Bitwarden data.");
+        if (n is null) throw new StoreException(VaultError.KdfMissing);
         var kdf = new KdfConfig((KdfType)(Int(n["kdfType"]) ?? 0), Int(n["iterations"]) ?? 600000, Int(n["memory"]), Int(n["parallelism"]));
         var valid = kdf.Type switch
         {
             KdfType.Pbkdf2 => kdf.Iterations is >= 5_000 and <= 2_000_000,
             KdfType.Argon2id => kdf.Iterations is >= 2 and <= 10 && kdf.MemoryMiB is null or (>= 16 and <= 1024)
                                 && kdf.Parallelism is null or (>= 1 and <= 16),
-            _ => throw new StoreException($"Unsupported KDF type {(int)kdf.Type}."),
+            _ => throw new StoreException(VaultError.KdfUnsupported),
         };
-        if (!valid) throw new StoreException("The KDF settings in the Bitwarden data are outside the range Bitwarden allows.");
+        if (!valid) throw new StoreException(VaultError.KdfOutOfRange);
         return kdf;
     }
 

@@ -10,56 +10,6 @@ using N = Vaultbar.MacE2E.Native;
 
 namespace Vaultbar.MacE2E;
 
-internal sealed class RecordingPlatform(MacPlatform mac) : IPlatform
-{
-    public readonly List<string> Opened = [];
-    public readonly FakeTouchIdDevice TouchIdDevice = new();
-    public IQuickUnlockProvider? QuickUnlock { get; private set; }
-
-    public void UseFakeTouchId(string keyPath) => QuickUnlock = new MacTouchId(TouchIdDevice, keyPath);
-
-    public string? StartHotkey(Hotkey hotkey, Action onPressed) => mac.StartHotkey(hotkey, onPressed);
-    public ForeignWindow? CaptureForeground() => mac.CaptureForeground();
-    public PixelPoint? AnchorPoint(ForeignWindow? target) => mac.AnchorPoint(target);
-    public void AttachWindow(Window window) => mac.AttachWindow(window);
-    public void AfterStart(bool shown) => mac.AfterStart(shown);
-    public void AfterShow() => mac.AfterShow();
-    public void AfterHide() => mac.AfterHide();
-    public void ExcludeFromCapture(Window window) => mac.ExcludeFromCapture(window);
-
-    // MacPlatform would open the system Accessibility dialog here, which is the owner's to answer.
-    public string? AutoTypeUnavailableReason(ForeignWindow? target) => "test run: Accessibility not requested";
-
-    public Task<AutoTypeResult> AutoTypeAsync(ForeignWindow? target, IReadOnlyList<TypeStep> steps, Action hideWindow) => mac.AutoTypeAsync(target, steps, hideWindow);
-    public Task<object?> SetClipboardAsync(string text) => mac.SetClipboardAsync(text);
-    public Task ClearClipboardAsync(object token) => mac.ClearClipboardAsync(token);
-    public void OpenUrl(WebAddress address) => Opened.Add(address.Value);
-    public void WatchSystemLock(Action onLock) => mac.WatchSystemLock(onLock);
-    public void Dispose() => mac.Dispose();
-}
-
-/// <summary>Stands in for the Secure Enclave and the finger, so the full unlock flow runs with no system dialog.</summary>
-internal sealed class FakeTouchIdDevice : ITouchIdDevice
-{
-    public int NextResult;
-    public int Prompts;
-
-    public bool Available => true;
-
-    public int Create(out byte[] blob)
-    {
-        blob = System.Security.Cryptography.RandomNumberGenerator.GetBytes(32);
-        return 0;
-    }
-
-    public int Derive(byte[] blob, byte[] challenge, string reason, out byte[] secret)
-    {
-        Prompts++;
-        secret = NextResult == 0 ? System.Security.Cryptography.HMACSHA256.HashData(blob, challenge) : [];
-        return NextResult;
-    }
-}
-
 internal static class Program
 {
     private const string Password = "e2e-master-password";
@@ -253,13 +203,13 @@ internal static class Program
     {
         N.Type("github");
         await UntilAsync(() => Rows.FirstOrDefault()?.Title == "GitHub");
-        N.Chord('c', N.Command);
-        Check("Cmd+C copies the password", await UntilAsync(() => Clipboard == "gh-Secr3t!pass"), $"toast: {Toast}");
+        N.Chord('c', N.Command | N.Shift);
+        Check("Cmd+Shift+C copies the password, as in 1Password", await UntilAsync(() => Clipboard == "gh-Secr3t!pass"), $"toast: {Toast}");
         Check("copied secret is marked concealed and transient", MacPlatform.ConcealedMarkers.All(type => N.PasteboardHasType(Board, type)));
         Check("copied secret clears after the configured time", await UntilAsync(() => Clipboard == "", 4000));
 
-        N.Chord('c', N.Command | N.Shift);
-        Check("Cmd+Shift+C copies the username", await UntilAsync(() => Clipboard == "alex-example"), Clipboard);
+        N.Chord('c', N.Command);
+        Check("Cmd+C copies the username, as in 1Password", await UntilAsync(() => Clipboard == "alex-example"), Clipboard);
         N.Chord('c', N.Command | N.Option);
         Check("Cmd+Option+C copies the one-time code", await UntilAsync(() => Clipboard.Length == 6 && Clipboard.All(char.IsAsciiDigit)), Clipboard);
         N.Chord('p', N.Command);

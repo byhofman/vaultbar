@@ -40,26 +40,11 @@ public sealed class Config
             File.WriteAllText(FilePath, JsonSerializer.Serialize(cfg, JsonCtx.Default.Config));
             return cfg;
         }
-        catch (Exception ex)
+        catch (Exception ex) when (ex is JsonException or IOException or UnauthorizedAccessException)
         {
+            // The settings file is the user's own, so its parse error (line and position) is safe and useful to log.
             Log.Write($"config: {ex.Message}; using defaults");
             return new Config();
         }
     }
 }
-
-public sealed class UsageEntry
-{
-    public int C { get; set; }
-    public long T { get; set; }
-}
-
-[JsonSourceGenerationOptions(
-    WriteIndented = true,
-    PropertyNamingPolicy = JsonKnownNamingPolicy.CamelCase,
-    ReadCommentHandling = JsonCommentHandling.Skip,
-    AllowTrailingCommas = true,
-    DefaultIgnoreCondition = JsonIgnoreCondition.Never)]
-[JsonSerializable(typeof(Config))]
-[JsonSerializable(typeof(Dictionary<string, UsageEntry>))]
-internal partial class JsonCtx : JsonSerializerContext;

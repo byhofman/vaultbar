@@ -4,38 +4,6 @@ using System.Text.Json.Nodes;
 
 namespace Vaultbar.Vault;
 
-public enum QuickUnlockStatus
-{
-    Success,
-    Canceled,
-    Unavailable,
-    Failed,
-}
-
-public enum QuickUnlockSetting
-{
-    NotSetUp,
-    On,
-    Off,
-}
-
-public interface IQuickUnlockProvider
-{
-    string Name { get; }
-
-    Task<bool> IsAvailableAsync();
-
-    /// <summary>
-    /// Signs the challenge with a device-bound key that asks for the user's face, fingerprint or PIN.
-    /// The same key always gives the same signature for the same challenge.
-    /// </summary>
-    Task<(QuickUnlockStatus Status, byte[]? Signature)> SignAsync(byte[] challenge, bool createKey);
-
-    Task DeleteKeyAsync();
-}
-
-public sealed record QuickUnlockEntry(string UserId, byte[] Challenge, byte[] WrappedKey);
-
 /// <summary>
 /// Keeps the vault's user key on this device, encrypted with a key derived from a device-bound signature,
 /// and on Windows wrapped once more with DPAPI.

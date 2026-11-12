@@ -2,6 +2,14 @@
 
 Non-obvious choices a reader could not predict from the code. Newest first.
 
+## D-11 Copy keys follow 1Password, not the earlier table — 2026-11-13
+
+The README promised 1Password's keys but had them backwards: 1Password's Quick Access copies the username with Ctrl+C
+and the password with Ctrl+Shift+C ([its shortcut list](https://support.1password.com/keyboard-shortcuts/)). Vaultbar
+now does the same, since switching users are the ones it is for, and a password pasted where a username was expected is
+the worse mistake. Alt+Enter opens the website as in 1Password. Ctrl+O keeps opening the website (1Password: item
+details in a new window), because Tab already shows the details and changing it would only move the surprise.
+
 ## D-10 Secrets are short-lived strings, not pinned buffers — 2026-11-13
 
 Keys live in byte arrays that locking zeroes. Passwords, codes and notes stay encrypted until a copy, fill or reveal, and

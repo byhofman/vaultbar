@@ -12,18 +12,24 @@ without leaving the app you are in.
   unlocks it with your master password, offline.
 - Auto-types into the window you came from, like 1Password's Quick Access and Bitwarden's own browser autofill.
 
-## How it compares to 1Password Quick Access
+## Coming from 1Password
+
+Vaultbar keeps 1Password's Quick Access habits: the same copy keys, Enter to fill, Esc to clear. To move your
+items, export them from 1Password and import the file into Bitwarden ([Bitwarden's guide](https://bitwarden.com/help/import-from-1password/));
+once the Bitwarden desktop app has synced, they show up in Vaultbar.
+
+The keys below are the ones on 1Password's [keyboard shortcuts](https://support.1password.com/keyboard-shortcuts/) page
+(checked 2026-11-13).
 
 | 1Password Quick Access | Vaultbar |
 | --- | --- |
-| Global shortcut Ctrl+Shift+Space | Same (configurable) |
-| Fuzzy search on title, username, website | Same, plus folder; ranking learns from what you use |
-| Suggestions for the app/site in front | "Suggested for …" from the window title / app, then Favorites and Recently used |
-| Enter fills into the previous app | Same: types `username ⇥ password`, then copies the one-time code |
-| Ctrl+C / Ctrl+Shift+C / Ctrl+Alt+C copy password / username / code | Same (macOS ⌘C / ⌘⇧C / ⌘⌥C). Bitwarden's Ctrl+P / Ctrl+U / Ctrl+T also work |
-| → shows item details | Tab or → |
-| Clipboard cleared after use | After 30 s and on lock, only if it still holds what Vaultbar put there; hidden from Windows clipboard history/cloud, macOS concealed type, KDE password hint |
-| Unlock with Windows Hello / Touch ID | Windows Hello on Windows, Touch ID on macOS; master password on Linux |
+| Ctrl+Shift+Space opens it (macOS: ⌥⌘\\, or ⇧⌘Space up to macOS 26) | Ctrl+Shift+Space (macOS ⌘⇧Space), configurable |
+| Esc clears the search | Same; a second Esc closes the bar |
+| Ctrl+C copies the username, Ctrl+Shift+C the password, Ctrl+Alt+C the one-time code | Same (macOS ⌘C, ⌘⇧C, ⌘⌥C). Bitwarden's Ctrl+U, Ctrl+P and Ctrl+T also work |
+| Alt+Enter opens the website and fills it | Alt+Enter or Ctrl+Enter opens the website. Enter types `username ⇥ password` into the app you came from, then copies the one-time code |
+| → shows the item's actions | Tab or → shows the item's fields, each one copyable |
+| Ctrl+Shift+O opens the item in the app | Opens it in the Bitwarden web vault |
+| Ctrl+O opens the item details in a new window | Ctrl+O opens the website; Tab shows the details |
 
 ## Keys
 
@@ -33,9 +39,10 @@ without leaving the app you are in.
 | ↑ ↓ PgUp PgDn | select | select field |
 | Enter | logins: **auto-type**; notes: copy; others: details | copy field |
 | Shift+Enter | auto-type password only | |
-| Ctrl+Enter / Ctrl+O | open website | open website |
-| Ctrl+C | copy password (card number, note, public key) | copy field |
-| Ctrl+Shift+C | copy username (card code, private key) | |
+| Ctrl+Enter / Alt+Enter / Ctrl+O | open website | open website (Ctrl+Enter) |
+| Ctrl+C | copy username (card number, note, public key) | copy field |
+| Ctrl+Shift+C | copy password (card code, private key) | |
+| Ctrl+U / Ctrl+P | copy username / password (Bitwarden's keys) | |
 | Ctrl+Alt+C / Ctrl+T | copy one-time code | |
 | Ctrl+Shift+U | copy website | copy website |
 | Ctrl+Shift+O | open in the Bitwarden web vault | open in the Bitwarden web vault |
@@ -162,6 +169,7 @@ vaultbar shortcut     Linux/GNOME: bind the hotkey through GNOME settings
 - It never talks to the Bitwarden server and never writes to the vault. The only network traffic is favicons, which you
   can turn off. Host names that only exist on a local network (IP addresses, `localhost`, `.local`, `.lan`,
   `.internal`, `.corp`, names without a dot) are never sent to the icon service.
+  A test ([NetworkTests](tests/Vaultbar.Tests/NetworkTests.cs)) fails if any other code could reach the network.
 - Names, usernames and websites are decrypted for search. **Passwords, codes, notes and hidden fields stay encrypted in
   memory** until you copy, fill or reveal them. Locking zeroes the keys.
 - Locks on idle timeout, `vaultbar lock`, Ctrl+L, the tray menu, and on session lock or sleep (Linux: the desktop's
@@ -177,7 +185,7 @@ vaultbar shortcut     Linux/GNOME: bind the hotkey through GNOME settings
   vault's user key on disk (`~/Library/Caches/vaultbar`, readable only by you). No Keychain item is created. Adding or
   removing a finger voids the key, and Vaultbar then asks for the master password and offers to set it up again.
 - Copied secrets are also cleared when Vaultbar locks, quits or crashes, even with `clipboardClearSeconds` at `0`.
-  Copies never sync to other devices: on Windows they skip clipboard history and cloud clipboard, on macOS they stay off
+  Copies stay out of clipboard history and off other devices where the system allows it: on Windows they skip clipboard history and cloud clipboard, on macOS they stay off
   Universal Clipboard and carry the concealed and transient markers clipboard managers honour, on KDE the password hint.
   The search bar is hidden from screen capture.
 - Auto-type checks before every keystroke that the window it is typing into still has focus, and stops the moment
