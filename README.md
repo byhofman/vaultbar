@@ -169,6 +169,7 @@ vaultbar shortcut     Linux/GNOME: bind the hotkey through GNOME settings
 - It never talks to the Bitwarden server and never writes to the vault. The only network traffic is favicons, which you
   can turn off. Host names that only exist on a local network (IP addresses, `localhost`, `.local`, `.lan`,
   `.internal`, `.corp`, names without a dot) are never sent to the icon service.
+  A test ([NetworkTests](tests/Vaultbar.Tests/NetworkTests.cs)) fails if any other code could reach the network.
 - Names, usernames and websites are decrypted for search. **Passwords, codes, notes and hidden fields stay encrypted in
   memory** until you copy, fill or reveal them. Locking zeroes the keys.
 - Locks on idle timeout, `vaultbar lock`, Ctrl+L, the tray menu, and on session lock or sleep (Linux: the desktop's
@@ -184,7 +185,7 @@ vaultbar shortcut     Linux/GNOME: bind the hotkey through GNOME settings
   vault's user key on disk (`~/Library/Caches/vaultbar`, readable only by you). No Keychain item is created. Adding or
   removing a finger voids the key, and Vaultbar then asks for the master password and offers to set it up again.
 - Copied secrets are also cleared when Vaultbar locks, quits or crashes, even with `clipboardClearSeconds` at `0`.
-  Copies never sync to other devices: on Windows they skip clipboard history and cloud clipboard, on macOS they stay off
+  Copies stay out of clipboard history and off other devices where the system allows it: on Windows they skip clipboard history and cloud clipboard, on macOS they stay off
   Universal Clipboard and carry the concealed and transient markers clipboard managers honour, on KDE the password hint.
   The search bar is hidden from screen capture.
 - Auto-type checks before every keystroke that the window it is typing into still has focus, and stops the moment
