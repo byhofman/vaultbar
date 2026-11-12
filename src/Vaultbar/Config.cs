@@ -47,19 +47,3 @@ public sealed class Config
         }
     }
 }
-
-public sealed class UsageEntry
-{
-    public int C { get; set; }
-    public long T { get; set; }
-}
-
-[JsonSourceGenerationOptions(
-    WriteIndented = true,
-    PropertyNamingPolicy = JsonKnownNamingPolicy.CamelCase,
-    ReadCommentHandling = JsonCommentHandling.Skip,
-    AllowTrailingCommas = true,
-    DefaultIgnoreCondition = JsonIgnoreCondition.Never)]
-[JsonSerializable(typeof(Config))]
-[JsonSerializable(typeof(Dictionary<string, UsageEntry>))]
-internal partial class JsonCtx : JsonSerializerContext;

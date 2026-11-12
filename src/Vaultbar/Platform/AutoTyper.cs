@@ -1,25 +1,4 @@
-using System.Text;
-
 namespace Vaultbar.Platform;
-
-/// <summary>Sends single keystrokes to whatever has keyboard focus.</summary>
-public interface IKeyboard
-{
-    void Type(Rune character);
-
-    void Press(SpecialKey key);
-}
-
-public enum AutoTypeResult
-{
-    Typed,
-
-    /// <summary>The previous window could not be brought back; nothing was typed.</summary>
-    TargetNotFocused,
-
-    /// <summary>Another window took focus while typing; nothing more was typed after that.</summary>
-    Interrupted,
-}
 
 public static class AutoTyper
 {

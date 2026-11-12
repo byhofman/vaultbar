@@ -1,51 +1,7 @@
 using System.Security.Cryptography;
 using System.Text;
-using Konscious.Security.Cryptography;
 
 namespace Vaultbar.Vault;
-
-public sealed class SymmetricKey : IDisposable
-{
-    private readonly byte[]? _encoded;
-
-    public SymmetricKey(byte[] enc, byte[]? mac)
-    {
-        Enc = enc;
-        Mac = mac;
-        Algorithm = mac is null ? KeyAlgorithm.AesCbc : KeyAlgorithm.AesCbcHmac;
-    }
-
-    internal SymmetricKey(byte[] enc, KeyAlgorithm algorithm, byte[] keyId, byte[] encoded)
-    {
-        Enc = enc;
-        Algorithm = algorithm;
-        KeyId = keyId;
-        _encoded = encoded;
-    }
-
-    public byte[] Enc { get; }
-    public byte[]? Mac { get; }
-    public KeyAlgorithm Algorithm { get; }
-    public byte[]? KeyId { get; }
-
-    public static SymmetricKey FromBytes(ReadOnlySpan<byte> key) => key.Length switch
-    {
-        64 => new SymmetricKey(key[..32].ToArray(), key[32..].ToArray()),
-        32 => new SymmetricKey(key.ToArray(), null),
-        > 64 => Cose.ParseKey(key),
-        _ => throw new CryptographicException($"Unexpected key length {key.Length}"),
-    };
-
-    /// <summary>The same bytes <see cref="FromBytes"/> takes.</summary>
-    public byte[] ToBytes() => _encoded is { } encoded ? encoded.ToArray() : Mac is null ? Enc.ToArray() : [.. Enc, .. Mac];
-
-    public void Dispose()
-    {
-        CryptographicOperations.ZeroMemory(Enc);
-        if (Mac != null) CryptographicOperations.ZeroMemory(Mac);
-        if (_encoded != null) CryptographicOperations.ZeroMemory(_encoded);
-    }
-}
 
 /// <summary>Bitwarden "EncString": "&lt;type&gt;.&lt;b64 iv&gt;|&lt;b64 ciphertext&gt;|&lt;b64 mac&gt;".</summary>
 public static class EncString
@@ -141,47 +97,4 @@ public static class EncString
         aes.Key = key;
         return aes.DecryptCbc(ct, iv);
     }
-}
-
-public enum KdfType
-{
-    Pbkdf2 = 0,
-    Argon2id = 1,
-}
-
-public sealed record KdfConfig(KdfType Type, int Iterations, int? MemoryMiB, int? Parallelism);
-
-public static class MasterKey
-{
-    public static byte[] Derive(string password, string salt, KdfConfig kdf)
-    {
-        var pw = Encoding.UTF8.GetBytes(password);
-        try
-        {
-            switch (kdf.Type)
-            {
-                case KdfType.Pbkdf2:
-                    return Rfc2898DeriveBytes.Pbkdf2(pw, Encoding.UTF8.GetBytes(salt), kdf.Iterations, HashAlgorithmName.SHA256, 32);
-                case KdfType.Argon2id:
-                    var argon = new Argon2id(pw)
-                    {
-                        Salt = SHA256.HashData(Encoding.UTF8.GetBytes(salt)),
-                        Iterations = kdf.Iterations,
-                        MemorySize = (kdf.MemoryMiB ?? 64) * 1024,
-                        DegreeOfParallelism = kdf.Parallelism ?? 4,
-                    };
-                    return argon.GetBytes(32);
-                default:
-                    throw new NotSupportedException($"Unsupported KDF {kdf.Type}");
-            }
-        }
-        finally
-        {
-            CryptographicOperations.ZeroMemory(pw);
-        }
-    }
-
-    public static SymmetricKey Stretch(byte[] masterKey) => new(
-        HKDF.Expand(HashAlgorithmName.SHA256, masterKey, 32, "enc"u8.ToArray()),
-        HKDF.Expand(HashAlgorithmName.SHA256, masterKey, 32, "mac"u8.ToArray()));
 }

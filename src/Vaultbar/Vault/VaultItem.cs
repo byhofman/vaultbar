@@ -5,28 +5,6 @@ using static Vaultbar.Vault.DesktopStore;
 
 namespace Vaultbar.Vault;
 
-public enum ItemType
-{
-    Login = 1,
-    SecureNote = 2,
-    Card = 3,
-    Identity = 4,
-    SshKey = 5,
-}
-
-public enum FieldKind
-{
-    Text,
-    Secret,
-    Totp,
-    Url,
-    Multiline,
-}
-
-public sealed record ItemField(string Label, FieldKind Kind, Func<string?> Value, Func<Totp.Code?>? TotpCode = null);
-
-public sealed record CopyAction(string Label, Func<string?> Value, bool Sensitive);
-
 /// <summary>
 /// A vault item whose searchable fields (name, username, URIs) are decrypted up front.
 /// Secrets stay encrypted until an action asks for them.
