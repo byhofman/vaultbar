@@ -21,6 +21,7 @@ public interface ITouchIdDevice
 /// The "signature" is a key agreement inside the Secure Enclave. It is deterministic like a Windows Hello signature, and
 /// the enclave refuses it without Touch ID. The file holds only a key blob that is useless outside this Mac's enclave.
 /// </summary>
+[SupportedOSPlatform("macos")]
 public sealed class MacTouchId(ITouchIdDevice device, string keyPath) : IQuickUnlockProvider
 {
     private const string Reason = "unlock your Bitwarden vault";
