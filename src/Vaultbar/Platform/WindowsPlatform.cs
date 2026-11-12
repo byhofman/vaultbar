@@ -46,7 +46,7 @@ internal sealed class WindowsPlatform : IPlatform
                 }
                 catch (Exception ex)
                 {
-                    Log.Write($"hotkey: {ex}");
+                    Log.Write($"hotkey: {Log.Shape(ex)}");
                 }
             }
             Native.UnregisterHotKey(0, 1);
@@ -129,9 +129,9 @@ internal sealed class WindowsPlatform : IPlatform
     public string? AutoTypeUnavailableReason(ForeignWindow? target) =>
         target is null ? "no previous window to fill" : null;
 
-    public async Task<bool> AutoTypeAsync(ForeignWindow? target, IReadOnlyList<TypeStep> steps, Action hideWindow)
+    public async Task<AutoTypeResult> AutoTypeAsync(ForeignWindow? target, IReadOnlyList<TypeStep> steps, Action hideWindow)
     {
-        if (target is null) return false;
+        if (target is null) return AutoTypeResult.TargetNotFocused;
         await WaitForKeysReleased();
         hideWindow();
         await Task.Delay(30);
@@ -141,29 +141,10 @@ internal sealed class WindowsPlatform : IPlatform
             if (i % 10 == 0) Native.SetForegroundWindow(target.Handle);
             await Task.Delay(20);
         }
-        if (Native.GetForegroundWindow() != target.Handle) return false;
+        if (Native.GetForegroundWindow() != target.Handle) return AutoTypeResult.TargetNotFocused;
         await Task.Delay(80);
 
-        await Task.Run(() =>
-        {
-            foreach (var step in steps)
-            {
-                switch (step)
-                {
-                    case TypeText t:
-                        SendText(t.Text);
-                        break;
-                    case TypeKey k:
-                        SendVirtualKey(k.Key == SpecialKey.Tab ? Native.VK_TAB : Native.VK_RETURN);
-                        break;
-                    case TypeDelay d:
-                        Thread.Sleep(d.Milliseconds);
-                        break;
-                }
-                Thread.Sleep(40);
-            }
-        });
-        return true;
+        return await Task.Run(() => AutoTyper.Run(steps, new Keyboard(), () => Native.GetForegroundWindow() == target.Handle));
     }
 
     private static async Task WaitForKeysReleased()
@@ -173,29 +154,31 @@ internal sealed class WindowsPlatform : IPlatform
             await Task.Delay(20);
     }
 
-    private static unsafe void SendText(string text)
+    private sealed unsafe class Keyboard : IKeyboard
     {
-        var inputs = stackalloc Native.INPUT[2];
-        foreach (var c in text)
+        public void Type(System.Text.Rune character)
         {
-            if (c == '\n') SendVirtualKey(Native.VK_RETURN);
-            else if (c == '\t') SendVirtualKey(Native.VK_TAB);
-            else if (c != '\r')
+            Span<char> units = stackalloc char[2];
+            var count = character.EncodeToUtf16(units);
+            var inputs = stackalloc Native.INPUT[2];
+            for (var i = 0; i < count; i++)
             {
-                inputs[0] = Native.KeyInput(0, c, Native.KEYEVENTF_UNICODE);
-                inputs[1] = Native.KeyInput(0, c, Native.KEYEVENTF_UNICODE | Native.KEYEVENTF_KEYUP);
+                inputs[0] = Native.KeyInput(0, units[i], Native.KEYEVENTF_UNICODE);
+                inputs[1] = Native.KeyInput(0, units[i], Native.KEYEVENTF_UNICODE | Native.KEYEVENTF_KEYUP);
                 Native.SendInput(2, inputs, sizeof(Native.INPUT));
             }
             Thread.Sleep(4);
         }
-    }
 
-    private static unsafe void SendVirtualKey(ushort vk)
-    {
-        var inputs = stackalloc Native.INPUT[2];
-        inputs[0] = Native.KeyInput(vk, 0, 0);
-        inputs[1] = Native.KeyInput(vk, 0, Native.KEYEVENTF_KEYUP);
-        Native.SendInput(2, inputs, sizeof(Native.INPUT));
+        public void Press(SpecialKey key)
+        {
+            var vk = key == SpecialKey.Tab ? Native.VK_TAB : Native.VK_RETURN;
+            var inputs = stackalloc Native.INPUT[2];
+            inputs[0] = Native.KeyInput(vk, 0, 0);
+            inputs[1] = Native.KeyInput(vk, 0, Native.KEYEVENTF_KEYUP);
+            Native.SendInput(2, inputs, sizeof(Native.INPUT));
+            Thread.Sleep(4);
+        }
     }
 
     public unsafe Task<object?> SetClipboardAsync(string text)
@@ -205,7 +188,8 @@ internal sealed class WindowsPlatform : IPlatform
         try
         {
             Native.EmptyClipboard();
-            var chars = (text + "\0").ToCharArray();
+            var chars = new char[text.Length + 1];
+            text.CopyTo(chars);
             fixed (char* p = chars) SetData(Native.CF_UNICODETEXT, (byte*)p, chars.Length * 2);
             uint zero = 0;
             SetData(Native.RegisterClipboardFormatW("CanIncludeInClipboardHistory"), (byte*)&zero, 4);
@@ -254,7 +238,7 @@ internal sealed class WindowsPlatform : IPlatform
         if (Native.SetClipboardData(format, mem) == 0) Native.GlobalFree(mem);
     }
 
-    public void OpenUrl(string url) => Process.Start(new ProcessStartInfo(url) { UseShellExecute = true })?.Dispose();
+    public void OpenUrl(Vault.WebAddress address) => Process.Start(new ProcessStartInfo(address.Value) { UseShellExecute = true })?.Dispose();
 
     public void WatchSystemLock(Action onLock)
     {

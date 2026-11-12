@@ -190,12 +190,12 @@ public sealed class UsageStore
         {
             string json;
             lock (_entries) json = JsonSerializer.Serialize(_entries, JsonCtx.Default.DictionaryStringUsageEntry);
-            Directory.CreateDirectory(Paths.ConfigDir);
+            Paths.EnsurePrivate(Paths.ConfigDir);
             File.WriteAllText(_path, json);
         }
         catch (Exception ex)
         {
-            Log.Write($"usage save: {ex.Message}");
+            Log.Write($"usage save: {Log.Shape(ex)}");
         }
     }
 }

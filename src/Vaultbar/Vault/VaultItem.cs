@@ -1,3 +1,5 @@
+using System.Security.Cryptography;
+using System.Text;
 using System.Text.Json.Nodes;
 using static Vaultbar.Vault.DesktopStore;
 
@@ -60,9 +62,8 @@ public sealed class VaultItem
                 break;
             case ItemType.Card:
                 var brand = D(Card?["brand"]);
-                var number = D(Card?["number"]);
                 Username = D(Card?["cardholderName"]) ?? "";
-                var last4 = number is { Length: >= 4 } ? "*" + number[^4..] : null;
+                var last4 = LastFour(Card?["number"]) is { } digits ? "*" + digits : null;
                 Subtitle = string.Join(", ", new[] { brand, last4 }.Where(s => !string.IsNullOrEmpty(s)));
                 break;
             case ItemType.Identity:
@@ -105,20 +106,9 @@ public sealed class VaultItem
 
     public string? IconHost => Hosts.FirstOrDefault(IsPublicHost);
 
-    public string? LaunchUrl => Uris.Select(WebUrl).FirstOrDefault(u => u != null);
+    public WebAddress? LaunchUrl => Uris.Select(WebAddress.From).FirstOrDefault(u => u != null);
 
     private static readonly string[] PrivateSuffixes = ["localhost", "local", "lan", "internal", "intranet", "corp", "home", "home.arpa", "localdomain"];
-
-    /// <summary>The http(s) address to open for a stored URI, or null for anything else (file paths, app links, programs).</summary>
-    public static string? WebUrl(string? uri)
-    {
-        if (string.IsNullOrWhiteSpace(uri)) return null;
-        uri = uri.Trim();
-        var candidate = uri.Contains("://") ? uri : "https://" + uri;
-        if (!Uri.TryCreate(candidate, UriKind.Absolute, out var u) || u.Scheme is not ("http" or "https") || string.IsNullOrEmpty(u.Host))
-            return null;
-        return u.AbsoluteUri;
-    }
 
     /// <summary>False for hosts that only exist on a local network; their names must not be sent to the icon service.</summary>
     public static bool IsPublicHost(string host)
@@ -235,6 +225,21 @@ public sealed class VaultItem
     }
 
     private string? D(JsonNode? node) => Str(node) is { Length: > 0 } s ? EncString.Decrypt(s, _key) : null;
+
+    /// <summary>The end of a card number for the list, without the whole number ever becoming a string.</summary>
+    private string? LastFour(JsonNode? node)
+    {
+        if (Str(node) is not { Length: > 0 } s) return null;
+        var bytes = EncString.DecryptBytes(s, _key);
+        try
+        {
+            return bytes.Length >= 4 ? Encoding.UTF8.GetString(bytes.AsSpan()[^4..]) : null;
+        }
+        finally
+        {
+            CryptographicOperations.ZeroMemory(bytes);
+        }
+    }
 
     internal static string? HostOf(string uri)
     {

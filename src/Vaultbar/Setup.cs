@@ -59,7 +59,7 @@ public static class Setup
                     Type=Application
                     Name=Vaultbar
                     Comment=Quick search for Bitwarden
-                    Exec="{Exe}" background
+                    Exec={DesktopExec(Exe)} background
                     Terminal=false
                     NoDisplay=true
                     X-GNOME-Autostart-enabled=true
@@ -73,6 +73,21 @@ public static class Setup
 
         Console.WriteLine(enable ? "Vaultbar will start at login." : "Vaultbar will no longer start at login.");
         return 0;
+    }
+
+    /// <summary>
+    /// Quotes a path for a desktop entry's Exec key: escapes for the quoted argument first, then the string escape the
+    /// spec applies on top, so a folder name with a space, quote or dollar sign cannot change the command.
+    /// </summary>
+    internal static string DesktopExec(string path)
+    {
+        var quoted = new System.Text.StringBuilder("\"");
+        foreach (var c in path)
+        {
+            if (c is '"' or '`' or '$' or '\\') quoted.Append('\\');
+            quoted.Append(c);
+        }
+        return quoted.Append('"').ToString().Replace("\\", "\\\\").Replace("%", "%%");
     }
 
     /// <summary>Binds the hotkey through GNOME's custom keybindings (needed on Wayland).</summary>

@@ -63,8 +63,8 @@ internal static class Native
     public static string? PasteboardText(string name) =>
         ObjC.ToManaged(ObjC.Send(Board(name), ObjC.Sel("stringForType:"), ObjC.NSString("public.utf8-plain-text")));
 
-    public static bool PasteboardIsConcealed(string name) =>
-        ObjC.Send(Board(name), ObjC.Sel("stringForType:"), ObjC.NSString("org.nspasteboard.ConcealedType")) != 0;
+    public static bool PasteboardHasType(string name, string type) =>
+        ObjC.Send(Board(name), ObjC.Sel("stringForType:"), ObjC.NSString(type)) != 0;
 
     private static nint Board(string name) => ObjC.Send(ObjC.Class("NSPasteboard"), ObjC.Sel("pasteboardWithName:"), ObjC.NSString(name));
 

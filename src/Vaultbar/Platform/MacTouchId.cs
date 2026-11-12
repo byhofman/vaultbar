@@ -56,7 +56,7 @@ public sealed class MacTouchId(ITouchIdDevice device, string keyPath) : IQuickUn
             }
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or DllNotFoundException or EntryPointNotFoundException)
             {
-                Log.Write($"touch id: {ex.Message}");
+                Log.Write($"touch id: {Log.Shape(ex)}");
                 return (QuickUnlockStatus.Unavailable, null);
             }
         });
@@ -69,7 +69,7 @@ public sealed class MacTouchId(ITouchIdDevice device, string keyPath) : IQuickUn
         }
         catch (IOException ex)
         {
-            Log.Write($"touch id: {ex.Message}");
+            Log.Write($"touch id: {Log.Shape(ex)}");
         }
         return Task.CompletedTask;
     }

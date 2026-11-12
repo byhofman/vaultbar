@@ -2,6 +2,33 @@
 
 Non-obvious choices a reader could not predict from the code. Newest first.
 
+## D-10 Secrets are short-lived strings, not pinned buffers — 2026-11-13
+
+Keys live in byte arrays that locking zeroes. Passwords, codes and notes stay encrypted until a copy, fill or reveal, and
+then exist as ordinary .NET strings for that moment: the clipboard, SendInput, CGEvent and the text box all take strings,
+and .NET advises against SecureString. What is enforced instead is that nothing keeps them: the clipboard is recognised
+by a salted hash, locking drops every row and revealed field, and the card list decrypts only the last four digits.
+
+## D-9 Linux locks on the screensaver and logind signals — 2026-11-13
+
+`lockOnSystemLock` did nothing on Linux. Vaultbar now listens for `ActiveChanged` from org.freedesktop.ScreenSaver and
+org.gnome.ScreenSaver on the session bus, and for logind's `Lock` (this session only) and `PrepareForSleep` on the system
+bus, through Tmds.DBus.Protocol at the version Avalonia already ships, so no new dependency enters the build.
+
+## D-8 The single-instance lock and socket moved out of /tmp — 2026-11-13
+
+On macOS and Linux the named mutex lived in .NET's shared folder under /tmp and the socket in /tmp itself, both with
+names anyone could guess and take first. Both now sit in a folder only the user can open (`$XDG_RUNTIME_DIR/vaultbar`,
+else the cache folder). Windows keeps a session-local mutex and a named pipe: pipe names are machine-wide there, so
+another local user could take the name first and stop Vaultbar starting, but cannot talk to it.
+
+## D-7 Installers check GitHub's own digest of each asset — 2026-11-13
+
+GitHub records a SHA-256 digest for every release asset, so the installers read it from the API and refuse a download
+that differs. A SHA256SUMS file would come from the same release, would be missing from the releases already out, and
+adds nothing over it. Each release also gets a signed build-provenance attestation for anyone who wants to check the
+build itself.
+
 ## D-6 The dmg ships ad-hoc signed until a Developer ID exists — 2026-11-07
 
 Same as Dockyard: a browser download needs Open Anyway once, and that beats no download for the website to link to. The

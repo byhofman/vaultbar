@@ -16,9 +16,10 @@ public sealed class VaultService : IDisposable
 {
     private readonly Config _config;
     private readonly object _gate = new();
-    private readonly List<SymmetricKey> _keys = new();
     private SymmetricKey? _userKey;
-    private Dictionary<string, SymmetricKey> _orgKeys = new();
+
+    // Organisation and item keys by their wrapped form: a sync reuses the keys it already has instead of piling up copies.
+    private Dictionary<string, SymmetricKey> _unwrapped = new();
     private byte[]? _userKeyHash;
     private StoreSnapshot? _snapshot;
     private FileSystemWatcher? _watcher;
@@ -73,8 +74,8 @@ public sealed class VaultService : IDisposable
         catch (Exception ex)
         {
             State = VaultState.Error;
-            Error = ex is StoreException ? ex.Message : $"Could not read Bitwarden data: {ex.Message}";
-            Log.Write($"probe: {ex}");
+            Error = ex is StoreException ? ex.Message : "Could not read the Bitwarden data. The details are in vaultbar.log.";
+            Log.Write($"probe: {Log.Shape(ex)}");
         }
     }
 
@@ -92,13 +93,13 @@ public sealed class VaultService : IDisposable
         }
         catch (NotSupportedException ex)
         {
-            Log.Write($"unlock: {ex}");
+            Log.Write($"unlock: {Log.Shape(ex)}");
             return ex.Message;
         }
         catch (Exception ex)
         {
-            Log.Write($"unlock: {ex}");
-            return ex is StoreException ? ex.Message : $"Unlock failed: {ex.Message}";
+            Log.Write($"unlock: {Log.Shape(ex)}");
+            return ex is StoreException ? ex.Message : "Unlock failed. The details are in vaultbar.log.";
         }
     }
 
@@ -139,7 +140,7 @@ public sealed class VaultService : IDisposable
             }
             catch (CryptographicException ex)
             {
-                Log.Write($"quick unlock: {ex.Message}");
+                Log.Write($"quick unlock: {Log.Shape(ex)}");
                 _quickStore.Delete();
                 return (QuickUnlockStatus.Failed, $"{provider.Name} no longer matches this vault. Enter your master password to set it up again.");
             }
@@ -153,8 +154,8 @@ public sealed class VaultService : IDisposable
         }
         catch (Exception ex)
         {
-            Log.Write($"quick unlock: {ex}");
-            return (QuickUnlockStatus.Failed, ex is StoreException ? ex.Message : $"{provider.Name} unlock failed: {ex.Message}");
+            Log.Write($"quick unlock: {Log.Shape(ex)}");
+            return (QuickUnlockStatus.Failed, ex is StoreException ? ex.Message : $"{provider.Name} unlock failed. The details are in vaultbar.log.");
         }
     }
 
@@ -187,7 +188,7 @@ public sealed class VaultService : IDisposable
         }
         catch (Exception ex)
         {
-            Log.Write($"quick unlock setup: {ex}");
+            Log.Write($"quick unlock setup: {Log.Shape(ex)}");
             return QuickUnlockStatus.Failed;
         }
         finally
@@ -292,7 +293,6 @@ public sealed class VaultService : IDisposable
             _userKeyHash = SHA256.HashData(userKeyBytes);
             _userKey = SymmetricKey.FromBytes(userKeyBytes);
             CryptographicOperations.ZeroMemory(userKeyBytes);
-            _keys.Add(_userKey);
             LoadItems(snapshot);
         }
 
@@ -314,9 +314,9 @@ public sealed class VaultService : IDisposable
         lock (_gate)
         {
             Items = [];
-            foreach (var k in _keys) k.Dispose();
-            _keys.Clear();
-            _orgKeys = new();
+            foreach (var key in _unwrapped.Values) key.Dispose();
+            _unwrapped = new();
+            _userKey?.Dispose();
             _userKey = null;
             if (_userKeyHash != null) CryptographicOperations.ZeroMemory(_userKeyHash);
             _userKeyHash = null;
@@ -356,8 +356,28 @@ public sealed class VaultService : IDisposable
     private void LoadItems(StoreSnapshot s)
     {
         var userKey = _userKey ?? throw new InvalidOperationException("locked");
+        var previous = _unwrapped;
+        var unwrapped = new Dictionary<string, SymmetricKey>();
 
-        var orgKeys = LoadOrganizationKeys(s, userKey);
+        SymmetricKey Unwrap(string id, Func<byte[]> unwrap)
+        {
+            if (unwrapped.TryGetValue(id, out var key)) return key;
+            if (!previous.Remove(id, out key))
+            {
+                var raw = unwrap();
+                try
+                {
+                    key = SymmetricKey.FromBytes(raw);
+                }
+                finally
+                {
+                    CryptographicOperations.ZeroMemory(raw);
+                }
+            }
+            return unwrapped[id] = key;
+        }
+
+        var orgKeys = LoadOrganizationKeys(s, userKey, Unwrap);
 
         var folders = new Dictionary<string, string>();
         foreach (var (id, node) in s.Folders)
@@ -368,7 +388,7 @@ public sealed class VaultService : IDisposable
             }
             catch (Exception ex)
             {
-                Log.Write($"folder {id}: {ex.Message}");
+                Log.Write($"folder {id}: {Log.Shape(ex)}");
             }
         }
 
@@ -379,9 +399,8 @@ public sealed class VaultService : IDisposable
             if (node is not JsonObject cipher) continue;
             if (Str(cipher["deletedDate"]) != null || Str(cipher["archivedDate"]) != null) continue;
 
-            var baseKey = Str(cipher["organizationId"]) is { } orgId
-                ? orgKeys.GetValueOrDefault(orgId)
-                : userKey;
+            var orgId = Str(cipher["organizationId"]);
+            var baseKey = orgId is null ? userKey : orgKeys.GetValueOrDefault(orgId);
             if (baseKey is null)
             {
                 failed++;
@@ -391,30 +410,25 @@ public sealed class VaultService : IDisposable
             try
             {
                 var key = baseKey;
-                if (Str(cipher["key"]) is { } itemKey)
-                {
-                    var raw = EncString.DecryptBytes(itemKey, baseKey);
-                    key = SymmetricKey.FromBytes(raw);
-                    CryptographicOperations.ZeroMemory(raw);
-                    _keys.Add(key);
-                }
+                if (Str(cipher["key"]) is { } itemKey) key = Unwrap($"item|{orgId}|{itemKey}", () => EncString.DecryptBytes(itemKey, baseKey));
                 var folder = Str(cipher["folderId"]) is { } fid ? folders.GetValueOrDefault(fid) : null;
                 items.Add(new VaultItem(cipher, key, folder));
             }
             catch (Exception ex)
             {
                 failed++;
-                Log.Write($"cipher {Str(cipher["id"])}: {ex.Message}");
+                Log.Write($"cipher {Str(cipher["id"])}: {Log.Shape(ex)}");
             }
         }
 
         items.Sort((a, b) => string.Compare(a.Name, b.Name, StringComparison.OrdinalIgnoreCase));
-        _orgKeys = orgKeys;
+        _unwrapped = unwrapped;
+        foreach (var stale in previous.Values) stale.Dispose();
         Items = items;
         FailedItems = failed;
     }
 
-    private Dictionary<string, SymmetricKey> LoadOrganizationKeys(StoreSnapshot s, SymmetricKey userKey)
+    private static Dictionary<string, SymmetricKey> LoadOrganizationKeys(StoreSnapshot s, SymmetricKey userKey, Func<string, Func<byte[]>, SymmetricKey> unwrap)
     {
         var orgKeys = new Dictionary<string, SymmetricKey>();
         if (s.OrgKeys.Count == 0 || s.EncPrivateKey is null) return orgKeys;
@@ -435,7 +449,7 @@ public sealed class VaultService : IDisposable
         catch (Exception ex) when (ex is CryptographicException or NotSupportedException or FormatException)
         {
             // A damaged private key costs the organisation items, which then count as failed, not the personal vault.
-            Log.Write($"private key: {ex.Message}");
+            Log.Write($"private key: {Log.Shape(ex)}");
             return orgKeys;
         }
 
@@ -443,15 +457,11 @@ public sealed class VaultService : IDisposable
         {
             try
             {
-                var raw = EncString.DecryptRsa(enc, rsa);
-                var key = SymmetricKey.FromBytes(raw);
-                CryptographicOperations.ZeroMemory(raw);
-                orgKeys[orgId] = key;
-                _keys.Add(key);
+                orgKeys[orgId] = unwrap($"org|{orgId}|{enc}", () => EncString.DecryptRsa(enc, rsa));
             }
             catch (Exception ex)
             {
-                Log.Write($"org key {orgId}: {ex.Message}");
+                Log.Write($"org key {orgId}: {Log.Shape(ex)}");
             }
         }
         return orgKeys;
@@ -479,6 +489,12 @@ public sealed class VaultService : IDisposable
         try
         {
             var snapshot = DesktopStore.Read(path);
+            if (snapshot.UserId != _snapshot?.UserId)
+            {
+                // The desktop app switched accounts: this key belongs to the other one.
+                Lock();
+                return;
+            }
             if (snapshot.ContentHash == _snapshot?.ContentHash)
             {
                 LastSync = snapshot.LastSync;
@@ -495,7 +511,7 @@ public sealed class VaultService : IDisposable
         }
         catch (Exception ex)
         {
-            Log.Write($"reload: {ex.Message}");
+            Log.Write($"reload: {Log.Shape(ex)}");
         }
     }
 

@@ -13,8 +13,6 @@ public sealed class AppController
     private readonly IClassicDesktopStyleApplicationLifetime _lifetime;
     private readonly CancellationTokenSource _shutdown = new();
     private QuickWindow? _window;
-    private object? _clipboardToken;
-    private CancellationTokenSource? _clipboardClear;
 
     internal AppController(IClassicDesktopStyleApplicationLifetime lifetime, IPlatform platform)
     {
@@ -25,6 +23,7 @@ public sealed class AppController
         if (OperatingSystem.IsMacOS() ? Config.TouchId : Config.WindowsHello) Vault.QuickUnlock = Platform.QuickUnlock;
         Usage = new UsageStore();
         Icons = new FaviconService();
+        Clipboard = new SecretClipboard(platform, Config.ClipboardClearSeconds);
     }
 
     public Config Config { get; }
@@ -33,6 +32,7 @@ public sealed class AppController
     public IPlatform Platform { get; }
     public UsageStore Usage { get; }
     public FaviconService Icons { get; }
+    public SecretClipboard Clipboard { get; }
     internal QuickWindow? Window => _window;
     public string HotkeyText { get; private set; } = "";
     public string? HotkeyError { get; private set; }
@@ -63,7 +63,12 @@ public sealed class AppController
         {
             if (Config.LockOnSystemLock) Lock();
         }));
-        Vault.Changed += () => Dispatcher.UIThread.Post(() => _window?.OnVaultChanged());
+        Vault.Changed += () => Dispatcher.UIThread.Post(() =>
+        {
+            // The vault also locks itself, when the desktop app switches accounts.
+            if (Vault.State != VaultState.Unlocked) _ = ClearCopiedSecretAsync();
+            _window?.OnVaultChanged();
+        });
 
         var idle = new DispatcherTimer { Interval = TimeSpan.FromSeconds(20) };
         idle.Tick += (_, _) =>
@@ -129,35 +134,18 @@ public sealed class AppController
         _window?.OnVaultChanged();
     }
 
-    public async Task CopyAsync(string text, bool sensitive)
-    {
-        _clipboardClear?.Cancel();
-        var token = await Platform.SetClipboardAsync(text);
-        _clipboardToken = token;
-        if (!sensitive || token is null || Config.ClipboardClearSeconds <= 0) return;
-
-        var cts = _clipboardClear = new CancellationTokenSource();
-        try
-        {
-            await Task.Delay(TimeSpan.FromSeconds(Config.ClipboardClearSeconds), cts.Token);
-            await Platform.ClearClipboardAsync(token);
-        }
-        catch (OperationCanceledException)
-        {
-        }
-    }
+    public Task CopyAsync(string text, bool sensitive) => Clipboard.CopyAsync(text, sensitive);
 
     private async Task ClearCopiedSecretAsync()
     {
-        if (_clipboardToken is not { } token || _clipboardClear is not { IsCancellationRequested: false } pending) return;
-        pending.Cancel();
         try
         {
-            await Platform.ClearClipboardAsync(token).WaitAsync(TimeSpan.FromMilliseconds(500));
+            await Clipboard.ClearNowAsync().WaitAsync(TimeSpan.FromMilliseconds(500));
         }
+        // Runs on lock, quit and crash: nothing may escape from here.
         catch (Exception ex)
         {
-            Log.Write($"clipboard clear: {ex.Message}");
+            Log.Write($"clipboard clear: {Log.Shape(ex)}");
         }
     }
 

@@ -510,7 +510,7 @@ public class UrlTests
     [InlineData("", null)]
     public void WebUrl_OnlyAllowsHttp(string input, string? expected)
     {
-        Assert.Equal(expected, VaultItem.WebUrl(input));
+        Assert.Equal(expected, WebAddress.From(input)?.Value);
     }
 
     [Theory]

@@ -7,7 +7,7 @@ namespace Vaultbar.Platform;
 /// <summary>The window that had focus before the quick search opened.</summary>
 public sealed record ForeignWindow(nint Handle, string Title, string App, int Pid = 0);
 
-public interface IPlatform : IDisposable
+public interface IPlatform : IClipboardAccess, IDisposable
 {
     /// <returns>Null when the hotkey is active, otherwise a human-readable reason.</returns>
     string? StartHotkey(Hotkey hotkey, Action onPressed);
@@ -31,14 +31,9 @@ public interface IPlatform : IDisposable
     /// <returns>Null when auto-type can run, otherwise why not.</returns>
     string? AutoTypeUnavailableReason(ForeignWindow? target);
 
-    Task<bool> AutoTypeAsync(ForeignWindow? target, IReadOnlyList<TypeStep> steps, Action hideWindow);
+    Task<AutoTypeResult> AutoTypeAsync(ForeignWindow? target, IReadOnlyList<TypeStep> steps, Action hideWindow);
 
-    /// <returns>A token identifying this clipboard write, used to clear it later only if unchanged.</returns>
-    Task<object?> SetClipboardAsync(string text);
-
-    Task ClearClipboardAsync(object token);
-
-    void OpenUrl(string url);
+    void OpenUrl(Vault.WebAddress address);
 
     void WatchSystemLock(Action onLock);
 
