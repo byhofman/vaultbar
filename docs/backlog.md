@@ -34,3 +34,5 @@ IDs are permanent: never renumber or reuse one.
 - [ ] VBR-5 Biometric unlock on Linux
 - [ ] VBR-6 Accounts without a master password (SSO with trusted devices or key connector)
 - [ ] VBR-17 English and Dutch UI, following the system language
+- [ ] VBR-18 Branding pass: Vaultbar's logo colour as a small hint in the interface (owner 2026-11-14: "branding is v1 for every app, as well is feedback")
+- [ ] VBR-19 Feedback from inside the app: support, a feature request or a bug report through the platform's feedback client (ACC-147), without an account where the app has none, and never sending the user's files (owner 2026-11-14: "branding is v1 for every app, as well is feedback")
