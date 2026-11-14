@@ -34,7 +34,7 @@ IDs are permanent: never renumber or reuse one.
 - [ ] VBR-5 Biometric unlock on Linux
 - [ ] VBR-6 Accounts without a master password (SSO with trusted devices or key connector)
 - [ ] VBR-17 English and Dutch UI, following the system language
-- [ ] VBR-18 Branding pass: Vaultbar's logo colour as a small hint in the interface (owner 2026-11-14: "branding is v1 for every app, as well is feedback")
+- [x] VBR-18 Branding pass: Vaultbar's logo colour as a small hint in the interface (owner 2026-11-14: "branding is v1 for every app, as well is feedback")
 - [ ] VBR-19 Feedback from inside the app: support, a feature request or a bug report through the platform's feedback client (ACC-147), without an account where the app has none, and never sending the user's files (owner 2026-11-14: "branding is v1 for every app, as well is feedback")
 - [x] VBR-20 Research: is the current Bitwarden integration secure? How Vaultbar talks to Bitwarden (CLI, API or SDK), where the session key, unlock state and cached items live in memory and on disk, what Windows Hello and Touch ID actually protect, the clipboard and auto-type exposure, the IPC between the bar and its helper, update signing, and how this compares with Bitwarden's own clients; findings ranked, each with a fix (owner 2026-11-14, v1) Done 2026-11-14: docs/research/security-review/findings.md (no Critical; H1, H2 before v1).
 - [ ] VBR-21 Monitoring (owner 2026-11-14, v1): the download page and the release downloads are watched for being up, with an alert; no telemetry from the app itself
