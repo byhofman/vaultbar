@@ -107,7 +107,7 @@ public sealed class BrowserAddressTests : IDisposable
         var started = DateTime.Now.AddSeconds(-1);
         string[] args = app == "Safari"
             ? ["-a", app, expected]
-            : ["-na", app, "--args", $"--user-data-dir={Path.Combine(_dir, "profile")}", "--no-first-run", "--no-default-browser-check", expected];
+            : ["-na", app, "--args", $"--user-data-dir={Path.Combine(_dir, "profile")}", "--no-first-run", "--no-default-browser-check", "--use-mock-keychain", expected];
         using (Process.Start("open", args)) { }
         try
         {
@@ -116,10 +116,10 @@ public sealed class BrowserAddressTests : IDisposable
             for (var i = 0; i < 40 && address != expected; i++)
             {
                 await Task.Delay(500);
-                pid = Process.GetProcessesByName(process).Select(p => p.Id).FirstOrDefault();
+                pid = Process.GetProcessesByName(process).Where(p => p.StartTime >= started).OrderBy(p => p.StartTime).Select(p => p.Id).FirstOrDefault();
                 if (pid != 0) address = MacBrowserAddress.Read(pid);
             }
-            Assert.True(expected == address, $"read {address ?? "nothing"}; {(pid == 0 ? "no process" : MacBrowserAddress.Describe(pid))}");
+            Assert.True(expected == address, $"read {address ?? "nothing"}; {(pid == 0 ? "no process" : MacBrowserAddress.Describe(pid))}; processes: {string.Join(", ", Process.GetProcesses().Where(p => p.ProcessName.Contains(process, StringComparison.Ordinal)).Select(p => $"{p.ProcessName} {p.Id}"))}");
         }
         finally
         {
