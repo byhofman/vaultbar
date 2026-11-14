@@ -37,11 +37,10 @@ public sealed class BrowserAddressTests : IDisposable
 
     public static TheoryData<string> Windows() => ["msedge", "chrome", "firefox"];
 
-    [BrowserTheory]
+    [BrowserTheory(Os = "windows")]
     [MemberData(nameof(Windows))]
     public async Task Windows_ReadsTheLoadedAddress_NotTheTitle(string browser)
     {
-        if (!OperatingSystem.IsWindows()) return;
         var exe = WindowsBrowserExe(browser);
         Assert.True(exe is not null, $"{browser} is not installed on this runner");
 
@@ -94,15 +93,15 @@ public sealed class BrowserAddressTests : IDisposable
 
     public static TheoryData<string, string> Mac() => new() { { "Safari", "Safari" }, { "Google Chrome", "Google Chrome" } };
 
-    [BrowserTheory]
+    [BrowserTheory(Os = "macos")]
     [MemberData(nameof(Mac))]
     public async Task Mac_ReadsTheLoadedAddress_NotTheTitle(string app, string process)
     {
-        if (!OperatingSystem.IsMacOS()) return;
         Assert.True(Directory.Exists($"/Applications/{app}.app"), $"{app} is not installed on this runner");
         Assert.True(MacAccessibilityTrusted(), "this runner has not granted Accessibility, which reading the address needs");
 
-        var page = Path.Combine(_dir, "lookalike.html");
+        // /var is a link to /private/var, and the browser reports the resolved path.
+        var page = Path.Combine(_dir.StartsWith("/var/", StringComparison.Ordinal) ? "/private" + _dir : _dir, "lookalike.html");
         File.WriteAllText(page, $"<!doctype html><title>{Marker}</title><h1>Contoso</h1>");
         var expected = new Uri(page).AbsoluteUri;
         var started = DateTime.Now.AddSeconds(-1);
@@ -113,13 +112,14 @@ public sealed class BrowserAddressTests : IDisposable
         try
         {
             string? address = null;
+            var pid = 0;
             for (var i = 0; i < 40 && address != expected; i++)
             {
                 await Task.Delay(500);
-                var pid = Process.GetProcessesByName(process).Select(p => p.Id).FirstOrDefault();
+                pid = Process.GetProcessesByName(process).Select(p => p.Id).FirstOrDefault();
                 if (pid != 0) address = MacBrowserAddress.Read(pid);
             }
-            Assert.Equal(expected, address);
+            Assert.True(expected == address, $"read {address ?? "nothing"}; {(pid == 0 ? "no process" : MacBrowserAddress.Describe(pid))}");
         }
         finally
         {
@@ -179,9 +179,14 @@ public sealed class BrowserAddressTests : IDisposable
 /// <summary>A test that opens real browsers, run only where VAULTBAR_BROWSER_TESTS=1 says the machine is a throwaway one.</summary>
 public sealed class BrowserTheoryAttribute : TheoryAttribute
 {
-    public BrowserTheoryAttribute()
+    public required string Os
     {
-        if (Environment.GetEnvironmentVariable("VAULTBAR_BROWSER_TESTS") != "1") Skip = "set VAULTBAR_BROWSER_TESTS=1 on a throwaway machine";
-        else if (!OperatingSystem.IsWindows() && !OperatingSystem.IsMacOS()) Skip = "Windows and macOS only";
+        get;
+        init
+        {
+            field = value;
+            if (Environment.GetEnvironmentVariable("VAULTBAR_BROWSER_TESTS") != "1") Skip = "set VAULTBAR_BROWSER_TESTS=1 on a throwaway machine";
+            else if (!OperatingSystem.IsOSPlatform(value)) Skip = $"{value} only";
+        }
     }
 }
