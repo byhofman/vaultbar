@@ -125,7 +125,7 @@ public sealed class BrowserAddressTests : IDisposable
                 user_pref("datareporting.policy.dataSubmissionPolicyBypassNotification", true);
                 user_pref("browser.shell.checkDefaultBrowser", false);
                 """);
-        using (Process.Start(new ProcessStartInfo(file, args) { RedirectStandardInput = true, RedirectStandardOutput = true, RedirectStandardError = true })) { }
+        using (Process.Start(new ProcessStartInfo(file, args) { RedirectStandardInput = true })) { }
         try
         {
             string? address = null;
