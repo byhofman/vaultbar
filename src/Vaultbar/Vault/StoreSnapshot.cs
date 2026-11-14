@@ -6,6 +6,9 @@ public sealed class StoreSnapshot
 {
     public required string Path { get; init; }
     public required string UserId { get; init; }
+
+    /// <summary>Every account the desktop app has signed in, the active one among them.</summary>
+    public IReadOnlyList<string> AccountIds { get; init; } = [];
     public required string Email { get; init; }
     public required string Salt { get; init; }
     public required KdfConfig Kdf { get; init; }

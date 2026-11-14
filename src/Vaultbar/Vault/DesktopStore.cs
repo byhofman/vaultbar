@@ -112,6 +112,7 @@ public static class DesktopStore
         {
             Path = path,
             UserId = uid,
+            AccountIds = (root["global_account_accounts"] as JsonObject)?.Select(a => a.Key).ToList() ?? [uid],
             Email = email,
             Salt = salt,
             Kdf = kdf,
