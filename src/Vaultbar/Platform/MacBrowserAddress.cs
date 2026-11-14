@@ -37,11 +37,28 @@ internal static unsafe class MacBrowserAddress
     });
 
     /// <summary>What a read finds, for a test to say why it found no address.</summary>
-    internal static string Describe(int pid) =>
-        WithApp(pid, app => Scan(app, DateTime.UtcNow + Budget) is { } scan
-            ? $"{scan.Visited} elements, complete={scan.Complete}, visible web areas: [{string.Join(", ", scan.Visible)}], hidden: {scan.Hidden}"
-            : $"no window: focused error {AXUIElementCopyAttributeValue(app, FocusedWindow, out _)}, main error {AXUIElementCopyAttributeValue(app, MainWindow, out _)}")
-        ?? "not trusted or no such app";
+    internal static string Describe(int pid)
+    {
+        if (AXIsProcessTrusted() == 0) return "not trusted";
+        var app = AXUIElementCreateApplication(pid);
+        if (app == 0) return "no such app";
+        try
+        {
+            AXUIElementSetMessagingTimeout(app, 5f);
+            var before = $"before: role {AXUIElementCopyAttributeValue(app, Role, out _)}, windows {AXUIElementCopyAttributeValue(app, Retained("AXWindows"), out _)}, focused {AXUIElementCopyAttributeValue(app, FocusedWindow, out _)}";
+            var set = AXUIElementSetAttributeValue(app, ManualAccessibility, ObjC.Send(ObjC.Class("NSNumber"), ObjC.Sel("numberWithBool:"), 1));
+            Thread.Sleep(2000);
+            var scan = Scan(app, DateTime.UtcNow + TimeSpan.FromSeconds(10));
+            var after = scan is null
+                ? $"no window: focused {AXUIElementCopyAttributeValue(app, FocusedWindow, out _)}, main {AXUIElementCopyAttributeValue(app, MainWindow, out _)}"
+                : $"{scan.Visited} elements, complete={scan.Complete}, visible web areas: [{string.Join(", ", scan.Visible)}], hidden: {scan.Hidden}";
+            return $"{before}; set manual accessibility: {set}; after: {after}";
+        }
+        finally
+        {
+            CFRelease(app);
+        }
+    }
 
     private static T? WithApp<T>(int pid, Func<nint, T?> read)
     {
