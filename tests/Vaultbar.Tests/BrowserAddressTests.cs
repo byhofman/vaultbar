@@ -93,7 +93,9 @@ public sealed class BrowserAddressTests : IDisposable
 
     public static TheoryData<string, string> Mac() => new()
     {
-        { "Safari", "Safari" }, { "Google Chrome", "Google Chrome" }, { "Microsoft Edge", "Microsoft Edge" }, { "Firefox", "firefox" },
+        // Not Firefox: its web area reports no size, so the read cannot tell it from a hidden tab and the address stays
+        // unknown, which makes every fill into Firefox ask for a second Enter (README, Limitations).
+        { "Safari", "Safari" }, { "Google Chrome", "Google Chrome" }, { "Microsoft Edge", "Microsoft Edge" },
     };
 
     [BrowserTheory(Os = "macos")]

@@ -23,7 +23,8 @@ internal static unsafe class MacBrowserAddress
     private static readonly nint WebArea = Retained("AXWebArea"), ManualAccessibility = Retained("AXManualAccessibility");
 
     /// <summary>How long a slow or hung browser may hold up the bar before the address counts as unknown.</summary>
-    private static readonly TimeSpan Budget = TimeSpan.FromMilliseconds(1500);
+    /// <remarks>A walk of a browser window takes a hundred or so calls into the browser; on a slow machine they need it.</remarks>
+    private static readonly TimeSpan Budget = TimeSpan.FromSeconds(3);
 
     public static string? Read(int pid) => WithApp(pid, app =>
     {
