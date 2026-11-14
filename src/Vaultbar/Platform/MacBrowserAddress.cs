@@ -22,23 +22,33 @@ internal static unsafe class MacBrowserAddress
     private static readonly nint Size = Retained("AXSize"), FocusedWindow = Retained("AXFocusedWindow");
     private static readonly nint WebArea = Retained("AXWebArea"), ManualAccessibility = Retained("AXManualAccessibility");
 
-    public static string? Read(int pid)
+    public static string? Read(int pid) => WithApp(pid, app =>
     {
-        if (AXIsProcessTrusted() == 0) return null;
+        for (var attempt = 0; attempt < 6; attempt++)
+        {
+            if (Scan(app) is { Complete: true } scan && scan.Visible is [{ Length: > 0 } address]) return address;
+            Thread.Sleep(80);
+        }
+        return null;
+    });
+
+    /// <summary>What a read finds, for a test to say why it found no address.</summary>
+    internal static string Describe(int pid) =>
+        WithApp(pid, app => Scan(app) is { } scan ? $"{scan.Visited} elements, complete={scan.Complete}, visible web areas: [{string.Join(", ", scan.Visible)}], hidden: {scan.Hidden}" : "no focused window")
+        ?? "not trusted or no such app";
+
+    private static T? WithApp<T>(int pid, Func<nint, T?> read)
+    {
+        if (AXIsProcessTrusted() == 0) return default;
         var app = AXUIElementCreateApplication(pid);
-        if (app == 0) return null;
+        if (app == 0) return default;
         try
         {
             // A hung browser must not hold up the bar for the system's default of six seconds.
             AXUIElementSetMessagingTimeout(app, 0.5f);
             // Chromium browsers build their web accessibility tree only for assistive apps that ask for it this way.
             AXUIElementSetAttributeValue(app, ManualAccessibility, ObjC.Send(ObjC.Class("NSNumber"), ObjC.Sel("numberWithBool:"), 1));
-            for (var attempt = 0; attempt < 6; attempt++)
-            {
-                if (ReadOnce(app) is { Length: > 0 } address) return address;
-                Thread.Sleep(80);
-            }
-            return null;
+            return read(app);
         }
         finally
         {
@@ -46,25 +56,28 @@ internal static unsafe class MacBrowserAddress
         }
     }
 
-    private static string? ReadOnce(nint app)
+    private sealed record ScanResult(List<string> Visible, int Hidden, int Visited, bool Complete);
+
+    /// <summary>The web areas of the focused window, without looking inside them, so frames are never among them.</summary>
+    private static ScanResult? Scan(nint app)
     {
         if (AXUIElementCopyAttributeValue(app, FocusedWindow, out var window) != 0 || window == 0) return null;
         var queue = new Queue<nint>();
         queue.Enqueue(window);
+        var result = new ScanResult([], 0, 0, true);
+        var hidden = 0;
         var visited = 0;
-        string? found = null;
         try
         {
             while (queue.TryDequeue(out var element))
             {
                 try
                 {
-                    if (++visited > MaxElements) return null;
+                    if (++visited > MaxElements) return result with { Hidden = hidden, Visited = visited, Complete = false };
                     if (IsWebArea(element))
                     {
-                        if (!IsVisible(element)) continue;
-                        if (found != null) return null;
-                        found = UrlOf(element) ?? "";
+                        if (IsVisible(element)) result.Visible.Add(UrlOf(element) ?? "");
+                        else hidden++;
                         continue;
                     }
                     if (AXUIElementCopyAttributeValue(element, Children, out var children) != 0 || children == 0) continue;
@@ -83,7 +96,7 @@ internal static unsafe class MacBrowserAddress
                     CFRelease(element);
                 }
             }
-            return found;
+            return result with { Hidden = hidden, Visited = visited };
         }
         finally
         {
