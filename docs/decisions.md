@@ -2,6 +2,14 @@
 
 Non-obvious choices a reader could not predict from the code. Newest first.
 
+## D-12 Installers look up the release with GITHUB_TOKEN when it is set — 2026-11-14
+
+The installers read the release from the GitHub API to get the asset digest. Anonymous API calls are limited to 60 an
+hour per IP address, and GitHub-hosted macOS runners share egress addresses: 6 of 12 runners probed on 2026-11-14 got
+HTTP 403 with the quota at 0, which made the macOS installer test fail at random. CI now passes its own token, and the
+scripts send it only to the API (from a header file, so it stays out of the process list), never to the download.
+Users behind a shared address can do the same; everyone else needs nothing.
+
 ## D-11 Copy keys follow 1Password, not the earlier table — 2026-11-13
 
 The README promised 1Password's keys but had them backwards: 1Password's Quick Access copies the username with Ctrl+C

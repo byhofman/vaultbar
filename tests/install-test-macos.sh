@@ -14,7 +14,8 @@ failures=0
 
 check() {
   local name=$1; shift
-  if "$@" >/dev/null 2>&1; then print "PASS  $name"; else print "FAIL  $name"; failures=$((failures + 1)); fi
+  local out
+  if out=$("$@" 2>&1); then print "PASS  $name"; else print "FAIL  $name"; print -r -- "$out" | sed 's/^/      /'; failures=$((failures + 1)); fi
 }
 stop() { "$exe" quit >/dev/null 2>&1; sleep 1; }
 trap 'stop; rm -rf "$sandbox"' EXIT

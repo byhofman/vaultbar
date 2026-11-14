@@ -8,6 +8,7 @@
 .NOTES
     A download is checked against the SHA-256 digest GitHub records for the release asset, and refused if it differs.
     With -Archive, pass -Sha256 to check a file you downloaded yourself.
+    $env:GITHUB_TOKEN, when set, authenticates the release lookup; anonymous lookups share a 60-an-hour limit per IP address.
 #>
 param(
     [string]$Repo = 'byhofman/vaultbar',
@@ -64,7 +65,8 @@ try {
     if (-not $Archive) {
         $asset = "vaultbar-$rid.zip"
         $api = if ($Version -eq 'latest') { "https://api.github.com/repos/$Repo/releases/latest" } else { "https://api.github.com/repos/$Repo/releases/tags/$Version" }
-        try { $release = Invoke-RestMethod $api -UseBasicParsing }
+        $auth = if ($env:GITHUB_TOKEN) { @{ Authorization = "Bearer $env:GITHUB_TOKEN" } } else { @{} }
+        try { $release = Invoke-RestMethod $api -Headers $auth -UseBasicParsing }
         catch { throw "Could not read the release from GitHub ($api). Try again later, or download it and use -Archive." }
         $digest = ($release.assets | Where-Object name -EQ $asset | Select-Object -First 1).digest
         if ($digest -notmatch '^sha256:([0-9a-f]{64})$') { throw "Release $Version has no $asset with a SHA-256 digest." }

@@ -4,6 +4,7 @@
 #   curl -fsSL https://raw.githubusercontent.com/byhofman/vaultbar/main/install/install.sh | bash -s -- --uninstall
 # Options: --uninstall  --version vX.Y.Z  --archive path.tar.gz [--sha256 hex]  --repo owner/name  --no-start
 # A download is checked against the SHA-256 digest GitHub records for the release asset, and refused if it differs.
+# GITHUB_TOKEN, when set, authenticates the release lookup; anonymous lookups share a 60-an-hour limit per IP address.
 set -euo pipefail
 
 repo="byhofman/vaultbar" version="latest" archive="" expected="" uninstall=0 start=1
@@ -54,13 +55,20 @@ tmp=$(mktemp -d)
 trap 'rm -rf "$tmp"' EXIT
 
 fetch() { if command -v curl >/dev/null 2>&1; then curl -fsSL "$1" -o "$2"; else wget -qO "$2" "$1"; fi; }
+# A header file keeps the token out of the process list; wget has no such option, so it goes without.
+fetch_api() {
+  if [ -n "${GITHUB_TOKEN:-}" ] && command -v curl >/dev/null 2>&1; then
+    printf 'Authorization: Bearer %s\n' "$GITHUB_TOKEN" > "$tmp/auth"
+    curl -fsSL -H "@$tmp/auth" "$1" -o "$2"
+  else fetch "$1" "$2"; fi
+}
 sha256() { if command -v sha256sum >/dev/null 2>&1; then sha256sum "$1"; else shasum -a 256 "$1"; fi | cut -d" " -f1; }
 
 if [ -z "$archive" ]; then
   asset="vaultbar-$rid.tar.gz"
   if [ "$version" = latest ]; then api="https://api.github.com/repos/$repo/releases/latest"
   else api="https://api.github.com/repos/$repo/releases/tags/$version"; fi
-  fetch "$api" "$tmp/release.json" || { echo "Could not read the release from GitHub ($api). Try again later, or download it and use --archive." >&2; exit 1; }
+  fetch_api "$api" "$tmp/release.json" || { echo "Could not read the release from GitHub ($api). Try again later, or download it and use --archive." >&2; exit 1; }
   tokens=$(grep -oE '"(tag_name|name|digest)": *"[^"]*"' "$tmp/release.json")
   tag=$(echo "$tokens" | sed -n 's/^"tag_name": *"\(.*\)"$/\1/p' | head -n 1)
   expected=$(echo "$tokens" | awk -v want="\"name\": \"$asset\"" 'found && /^"digest"/ { sub(/.*"sha256:/, ""); sub(/"$/, ""); print; exit } $0 == want { found = 1 }')
