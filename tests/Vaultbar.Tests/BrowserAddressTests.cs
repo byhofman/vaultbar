@@ -110,11 +110,13 @@ public sealed class BrowserAddressTests : IDisposable
         var started = DateTime.Now.AddSeconds(-1);
         var profile = Path.Combine(_dir, "profile");
         Directory.CreateDirectory(profile);
-        string[] args = app switch
+        // Safari through Launch Services; the others straight from their binary, since on the runner a second instance
+        // started by open -n sits stopped (state T) and never answers.
+        var (file, args) = app switch
         {
-            "Safari" => ["-a", app, expected],
-            "Firefox" => ["-na", app, "--args", "-no-remote", "-new-instance", "-profile", profile, expected],
-            _ => ["-na", app, "--args", $"--user-data-dir={profile}", "--no-first-run", "--no-default-browser-check", "--use-mock-keychain", expected],
+            "Safari" => ("open", new[] { "-a", app, expected }),
+            "Firefox" => ($"/Applications/{app}.app/Contents/MacOS/firefox", new[] { "-no-remote", "-new-instance", "-profile", profile, expected }),
+            _ => ($"/Applications/{app}.app/Contents/MacOS/{app}", new[] { $"--user-data-dir={profile}", "--no-first-run", "--no-default-browser-check", "--use-mock-keychain", expected }),
         };
         if (app == "Firefox")
             File.WriteAllText(Path.Combine(profile, "user.js"), """
@@ -123,7 +125,7 @@ public sealed class BrowserAddressTests : IDisposable
                 user_pref("datareporting.policy.dataSubmissionPolicyBypassNotification", true);
                 user_pref("browser.shell.checkDefaultBrowser", false);
                 """);
-        using (Process.Start("open", args)) { }
+        using (Process.Start(new ProcessStartInfo(file, args) { RedirectStandardInput = true, RedirectStandardOutput = true, RedirectStandardError = true })) { }
         try
         {
             string? address = null;
