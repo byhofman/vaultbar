@@ -1,0 +1,14 @@
+name: diag-quota
+on: pull_request
+permissions:
+  contents: read
+jobs:
+  probe:
+    runs-on: macos-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        n: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]
+    steps:
+      - run: |
+          curl -sS -o /dev/null -D - https://api.github.com/repos/byhofman/vaultbar/releases/latest | grep -iE "^(HTTP|x-ratelimit-(limit|remaining|used))"
