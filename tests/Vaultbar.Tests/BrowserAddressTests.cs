@@ -107,7 +107,7 @@ public sealed class BrowserAddressTests : IDisposable
         var started = DateTime.Now.AddSeconds(-1);
         string[] args = app == "Safari"
             ? ["-a", app, expected]
-            : ["-na", app, "--args", $"--user-data-dir={Path.Combine(_dir, "profile")}", "--no-first-run", "--no-default-browser-check", expected];
+            : ["-na", app, "--args", $"--user-data-dir={Path.Combine(_dir, "profile")}", "--no-first-run", "--no-default-browser-check", "--use-mock-keychain", expected];
         using (Process.Start("open", args)) { }
         try
         {
