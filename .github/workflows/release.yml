@@ -49,6 +49,9 @@ jobs:
       - name: Disk image
         run: tests/dmg-test-macos.sh dist/vaultbar-osx-arm64.dmg
 
+      - name: Diagnose API quota
+        run: curl -sS -o /dev/null -D - https://api.github.com/rate_limit | grep -i "^x-ratelimit"
+
       - name: Installer
         run: tests/install-test-macos.sh dist/vaultbar-osx-arm64.tar.gz
 
