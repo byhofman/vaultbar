@@ -113,7 +113,8 @@ Uninstalling leaves your settings folder (see Configuration) in place.
 **Options:** install a specific release with `-Version v0.1.0` (PowerShell) or `--version v0.1.0` (bash/zsh). To
 install from an archive you already downloaded, use `-Archive <file>` or `--archive <file>`, with `-Sha256` / `--sha256`
 and the digest from the release page to have it checked. The archives are
-`vaultbar-<win|linux|osx>-<x64|arm64>.zip/.tar.gz` on the releases page (plus the `.dmg` for macOS). On macOS, `--dir <folder>` installs somewhere other than `/Applications`.
+`vaultbar-<win|linux|osx>-<x64|arm64>.zip/.tar.gz` on the releases page (plus the `.dmg` for macOS). On macOS, `--dir <folder>` installs somewhere other than `/Applications`. If the installer reports it could not read the release (GitHub allows 60 anonymous lookups an hour per
+IP address, which a shared office or VPN address can use up), set `GITHUB_TOKEN` to a GitHub token and run it again.
 
 ### Platform notes
 

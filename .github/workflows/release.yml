@@ -50,6 +50,8 @@ jobs:
         run: tests/dmg-test-macos.sh dist/vaultbar-osx-arm64.dmg
 
       - name: Installer
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
         run: tests/install-test-macos.sh dist/vaultbar-osx-arm64.tar.gz
 
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
@@ -91,7 +93,9 @@ jobs:
         run: tests/e2e-linux/run.ps1 -DockerContext ''
 
       - name: Linux installer
-        run: docker run --rm -v "$PWD:/w" "$(cat tests/linux-image)" bash /w/tests/install-test.sh
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: docker run --rm -e GITHUB_TOKEN -v "$PWD:/w" "$(cat tests/linux-image)" bash /w/tests/install-test.sh
 
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
@@ -124,6 +128,8 @@ jobs:
       # Against the published release, so the digest check runs on what GitHub records for a real asset.
       - name: Installer
         shell: pwsh
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
         run: |
           $dir = Join-Path $env:RUNNER_TEMP vaultbar
           $options = @{ InstallDir = $dir; NoAutostart = $true; NoPath = $true; NoStart = $true; NoShortcut = $true }

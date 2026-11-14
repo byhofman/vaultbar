@@ -4,6 +4,7 @@
 #   curl -fsSL https://raw.githubusercontent.com/byhofman/vaultbar/main/install/install-macos.sh | zsh -s -- --uninstall
 # Options: --uninstall  --version vX.Y.Z  --archive path.tar.gz [--sha256 hex]  --repo owner/name  --no-start  --dir path
 # A download is checked against the SHA-256 digest GitHub records for the release asset, and refused if it differs.
+# GITHUB_TOKEN, when set, authenticates the release lookup; anonymous lookups share a 60-an-hour limit per IP address.
 set -euo pipefail
 
 repo="byhofman/vaultbar" version="latest" archive="" expected="" uninstall=0 start=1 apps=""
@@ -54,7 +55,10 @@ if [[ -z $archive ]]; then
   asset="vaultbar-$rid.tar.gz"
   if [[ $version == latest ]]; then api="https://api.github.com/repos/$repo/releases/latest"
   else api="https://api.github.com/repos/$repo/releases/tags/$version"; fi
-  curl -fsSL "$api" -o "$tmp/release.json" || { print -u2 "Could not read the release from GitHub ($api). Try again later, or download it and use --archive."; exit 1; }
+  auth=()
+  # A header file keeps the token out of the process list.
+  [[ -n ${GITHUB_TOKEN:-} ]] && { print -r -- "Authorization: Bearer $GITHUB_TOKEN" > "$tmp/auth"; auth=(-H "@$tmp/auth"); }
+  curl -fsSL "${auth[@]}" "$api" -o "$tmp/release.json" || { print -u2 "Could not read the release from GitHub ($api). Try again later, or download it and use --archive."; exit 1; }
   tokens=$(grep -oE '"(tag_name|name|digest)": *"[^"]*"' "$tmp/release.json")
   tag=$(print -r -- "$tokens" | sed -n 's/^"tag_name": *"\(.*\)"$/\1/p' | head -n 1)
   expected=$(print -r -- "$tokens" | awk -v want="\"name\": \"$asset\"" 'found && /^"digest"/ { sub(/.*"sha256:/, ""); sub(/"$/, ""); print; exit } $0 == want { found = 1 }')
