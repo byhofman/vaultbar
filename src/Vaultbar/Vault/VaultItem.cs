@@ -29,11 +29,12 @@ public sealed class VaultItem
         {
             case ItemType.Login:
                 Username = D(Login?["username"]) ?? "";
-                Uris = (Login?["uris"] as JsonArray ?? [])
-                    .Select(u => D(u?["uri"]))
-                    .Where(u => !string.IsNullOrWhiteSpace(u))
-                    .Select(u => u!)
+                LoginUris = (Login?["uris"] as JsonArray ?? [])
+                    .Select(u => (Uri: D(u?["uri"]), Match: Int(u?["match"])))
+                    .Where(u => !string.IsNullOrWhiteSpace(u.Uri))
+                    .Select(u => new LoginUri(u.Uri!, u.Match is { } m ? (UriMatch)m : null))
                     .ToList();
+                Uris = LoginUris.Select(u => u.Uri).ToList();
                 HasTotp = Str(Login?["totp"]) != null;
                 HasPassword = Str(Login?["password"]) != null;
                 Subtitle = Username.Length > 0 ? Username : Uris.Select(HostOf).FirstOrDefault(h => h != null) ?? "";
@@ -74,6 +75,7 @@ public sealed class VaultItem
     public bool HasTotp { get; }
     public bool HasPassword { get; }
     public IReadOnlyList<string> Uris { get; } = [];
+    public IReadOnlyList<LoginUri> LoginUris { get; } = [];
     public IReadOnlyList<string> Hosts { get; }
 
     internal string NameLower { get; }
@@ -81,6 +83,8 @@ public sealed class VaultItem
     internal string FolderLower { get; }
 
     public string? PrimaryHost => Hosts.FirstOrDefault();
+
+    public bool MatchesPage(string pageUrl, UriMatchSettings settings) => LoginUris.Any(u => UriRules.Matches(u, pageUrl, settings));
 
     public string? IconHost => Hosts.FirstOrDefault(IsPublicHost);
 

@@ -19,5 +19,6 @@ public sealed class StoreSnapshot
     public string IconsBaseUrl { get; init; } = "https://icons.bitwarden.net";
     public string WebVaultUrl { get; init; } = "https://vault.bitwarden.com";
     public string? VaultTimeout { get; init; }
+    public UriMatchSettings UriMatch { get; init; } = UriMatchSettings.Default;
     public string ContentHash { get; init; } = "";
 }

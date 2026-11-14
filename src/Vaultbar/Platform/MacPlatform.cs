@@ -67,8 +67,11 @@ internal sealed class MacPlatform(string? pasteboardName = null, string lockNoti
         _lastTarget = app;
 
         var name = ObjC.ToManaged(ObjC.Send(app, ObjC.Sel("localizedName"))) ?? "";
-        return new ForeignWindow(app, Ax.FocusedWindowTitle(pid) ?? "", name, pid);
+        var browser = Browsers.IsBrowserBundle(ObjC.ToManaged(ObjC.Send(app, ObjC.Sel("bundleIdentifier"))));
+        return new ForeignWindow(app, Ax.FocusedWindowTitle(pid) ?? "", name, pid) { IsBrowser = browser, Address = browser ? MacBrowserAddress.Read(pid) : null };
     }
+
+    public string? BrowserAddress(ForeignWindow browser) => MacBrowserAddress.Read(browser.Pid);
 
     public Vault.IQuickUnlockProvider QuickUnlock { get; } = new MacTouchId(new NativeTouchId(), Path.Combine(Paths.CacheDir, "touch-id-key.dat"));
 

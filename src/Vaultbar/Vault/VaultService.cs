@@ -47,6 +47,7 @@ public sealed class VaultService : IDisposable
     public string IconsBaseUrl { get; private set; } = "https://icons.bitwarden.net";
     public string WebVaultUrl { get; private set; } = "https://vault.bitwarden.com";
     public bool ShowFavicons { get; private set; } = true;
+    public UriMatchSettings UriMatch { get; private set; } = UriMatchSettings.Default;
     public TimeSpan? IdleTimeout { get; private set; }
 
     public bool IdleExpired => State == VaultState.Unlocked && IdleTimeout is { } t && DateTime.UtcNow - _lastActivity > t;
@@ -350,6 +351,7 @@ public sealed class VaultService : IDisposable
         IconsBaseUrl = s.IconsBaseUrl;
         WebVaultUrl = s.WebVaultUrl;
         ShowFavicons = s.ShowFavicons;
+        UriMatch = s.UriMatch;
         IdleTimeout = _config.LockAfterMinutes is { } m
             ? (m > 0 ? TimeSpan.FromMinutes(m) : null)
             : int.TryParse(s.VaultTimeout, out var minutes) && minutes > 0 ? TimeSpan.FromMinutes(minutes) : null;

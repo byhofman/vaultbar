@@ -34,6 +34,7 @@ public partial class QuickWindow : Window
     private readonly DispatcherTimer _footerTimer = new() { Interval = TimeSpan.FromSeconds(3) };
 
     private ForeignWindow? _target;
+    private string? _fillConfirmedFor;
     private Mode _mode;
     private Mode _modeBeforeReprompt;
     private Mode _modeBeforeHelp;
@@ -90,6 +91,7 @@ public partial class QuickWindow : Window
     public void Present(ForeignWindow? target)
     {
         _target = target;
+        _fillConfirmedFor = null;
         _repromptPassed.Clear();
         _afterReprompt = null;
         SearchBox.Text = "";
@@ -244,7 +246,7 @@ public partial class QuickWindow : Window
             }
 
             var context = string.IsNullOrEmpty(_target?.App) ? "" : $" for {_target!.App}";
-            Section($"SUGGESTED{context.ToUpperInvariant()}", Matcher.Suggest(items, _target, _app.Usage), 4);
+            Section($"SUGGESTED{context.ToUpperInvariant()}", Matcher.Suggest(items, _target, vault.UriMatch, _app.Usage), 4);
             Section("FAVORITES", items.Where(i => i.Favorite).OrderByDescending(i => _app.Usage.Boost(i.Id)), 6);
             Section("RECENTLY USED", _app.Usage.Recent(items), 6);
             if (_rows.Count == 0)
@@ -290,6 +292,11 @@ public partial class QuickWindow : Window
 
     private void Select(int index)
     {
+        if (_fillConfirmedFor != null)
+        {
+            _fillConfirmedFor = null;
+            UpdateFooter();
+        }
         if (index < 0) return;
         if (_selected >= 0 && _selected < _rows.Count && _rows[_selected] is ResultRow old) old.IsSelected = false;
         _selected = index;
@@ -612,6 +619,21 @@ public partial class QuickWindow : Window
             });
         }
 
+        if (_target is { IsBrowser: true })
+        {
+            _target = _target with { Address = _app.Platform.BrowserAddress(_target) };
+            if (Matcher.FillNeedsConfirmation(item, _target, _app.Vault.UriMatch) && _fillConfirmedFor != item.Id)
+            {
+                _fillConfirmedFor = item.Id;
+                var page = _target.Address is { } address ? UriRules.HostOf(address) ?? address : null;
+                Toast(page is null
+                    ? $"Can't read the address in {_target.App} · Enter again to fill anyway"
+                    : $"{page} is not a website of this item · Enter again to fill there", sticky: true);
+                return Task.CompletedTask;
+            }
+        }
+
+        _fillConfirmedFor = null;
         return RunGuardedAsync(item, true, async () =>
         {
             var template = passwordOnly ? "{PASSWORD}" : _app.Config.AutotypeSequence;
@@ -850,13 +872,13 @@ public partial class QuickWindow : Window
         timer.Start();
     }
 
-    private void Toast(string text)
+    private void Toast(string text, bool sticky = false)
     {
         FooterText.Text = text;
         FooterText.IsVisible = true;
         Hints.IsVisible = false;
         _footerTimer.Stop();
-        _footerTimer.Start();
+        if (!sticky) _footerTimer.Start();
     }
 
     private void UpdateFooter()

@@ -86,8 +86,11 @@ internal sealed class WindowsPlatform : IPlatform
         {
             app = "";
         }
-        return new ForeignWindow(hwnd, title, app, (int)pid);
+        var browser = Browsers.IsBrowserApp(app);
+        return new ForeignWindow(hwnd, title, app, (int)pid) { IsBrowser = browser, Address = browser ? WindowsBrowserAddress.Read(hwnd) : null };
     }
+
+    public string? BrowserAddress(ForeignWindow browser) => WindowsBrowserAddress.Read(browser.Handle);
 
     private static readonly string[] ShellClasses =
     [

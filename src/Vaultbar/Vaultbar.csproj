@@ -39,6 +39,10 @@
   </ItemGroup>
 
   <ItemGroup>
+    <EmbeddedResource Include="Vault\public_suffix_list.dat" LogicalName="Vaultbar.public_suffix_list.dat" />
+  </ItemGroup>
+
+  <ItemGroup>
     <InternalsVisibleTo Include="Vaultbar.Tests" />
     <InternalsVisibleTo Include="Vaultbar.MacE2E" />
   </ItemGroup>
