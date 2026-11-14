@@ -19,7 +19,7 @@ internal static unsafe class MacBrowserAddress
     private const int MaxElements = 1500, KAxValueCgSizeType = 2;
 
     private static readonly nint Children = Retained("AXChildren"), Role = Retained("AXRole"), Url = Retained("AXURL");
-    private static readonly nint Size = Retained("AXSize"), FocusedWindow = Retained("AXFocusedWindow");
+    private static readonly nint Size = Retained("AXSize"), FocusedWindow = Retained("AXFocusedWindow"), MainWindow = Retained("AXMainWindow");
     private static readonly nint WebArea = Retained("AXWebArea"), ManualAccessibility = Retained("AXManualAccessibility");
 
     public static string? Read(int pid) => WithApp(pid, app =>
@@ -34,7 +34,9 @@ internal static unsafe class MacBrowserAddress
 
     /// <summary>What a read finds, for a test to say why it found no address.</summary>
     internal static string Describe(int pid) =>
-        WithApp(pid, app => Scan(app) is { } scan ? $"{scan.Visited} elements, complete={scan.Complete}, visible web areas: [{string.Join(", ", scan.Visible)}], hidden: {scan.Hidden}" : "no focused window")
+        WithApp(pid, app => Scan(app) is { } scan
+            ? $"{scan.Visited} elements, complete={scan.Complete}, visible web areas: [{string.Join(", ", scan.Visible)}], hidden: {scan.Hidden}"
+            : $"no window: focused error {AXUIElementCopyAttributeValue(app, FocusedWindow, out _)}, main error {AXUIElementCopyAttributeValue(app, MainWindow, out _)}")
         ?? "not trusted or no such app";
 
     private static T? WithApp<T>(int pid, Func<nint, T?> read)
@@ -61,7 +63,9 @@ internal static unsafe class MacBrowserAddress
     /// <summary>The web areas of the focused window, without looking inside them, so frames are never among them.</summary>
     private static ScanResult? Scan(nint app)
     {
-        if (AXUIElementCopyAttributeValue(app, FocusedWindow, out var window) != 0 || window == 0) return null;
+        // An app that is not frontmost, as the browser is once the bar has opened, may report only its main window.
+        if ((AXUIElementCopyAttributeValue(app, FocusedWindow, out var window) != 0 || window == 0)
+            && (AXUIElementCopyAttributeValue(app, MainWindow, out window) != 0 || window == 0)) return null;
         var queue = new Queue<nint>();
         queue.Enqueue(window);
         var result = new ScanResult([], 0, 0, true);
