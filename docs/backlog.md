@@ -34,3 +34,4 @@ IDs are permanent: never renumber or reuse one.
 - [ ] VBR-5 Biometric unlock on Linux
 - [ ] VBR-6 Accounts without a master password (SSO with trusted devices or key connector)
 - [ ] VBR-17 English and Dutch UI, following the system language
+- [ ] VBR-20 Research: is the current Bitwarden integration secure? How Vaultbar talks to Bitwarden (CLI, API or SDK), where the session key, unlock state and cached items live in memory and on disk, what Windows Hello and Touch ID actually protect, the clipboard and auto-type exposure, the IPC between the bar and its helper, update signing, and how this compares with Bitwarden's own clients; findings ranked, each with a fix (owner 2026-11-14, v1)
