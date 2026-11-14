@@ -125,6 +125,25 @@ internal sealed class LinuxPlatform : IPlatform
 
     public PixelPoint? AnchorPoint(ForeignWindow? target) => null;
 
+    public TimeSpan? SystemIdleTime()
+    {
+        if (_wayland || !_hasX) return null;
+        lock (_xGate)
+        {
+            var d = QueryDisplay();
+            if (d == 0) return null;
+            try
+            {
+                return X11.IdleTime(d);
+            }
+            catch (Exception ex) when (ex is DllNotFoundException or EntryPointNotFoundException)
+            {
+                // libXss is not installed: the bar's own idle time stands in.
+                return null;
+            }
+        }
+    }
+
     public void AttachWindow(Window window)
     {
         _window = window;
@@ -307,6 +326,19 @@ internal sealed class LinuxPlatform : IPlatform
         private const string Lib = "libX11.so.6";
         private const string Tst = "libXtst.so.6";
         public const nuint XK_Tab = 0xff09, XK_Return = 0xff0d, XK_Shift_L = 0xffe1;
+
+        [StructLayout(LayoutKind.Sequential)]
+        private struct XScreenSaverInfo
+        {
+            public nuint Window;
+            public int State, Kind;
+            public nuint TilOrSince, Idle, EventMask;
+        }
+
+        [DllImport("libXss.so.1")] private static extern int XScreenSaverQueryInfo(nint d, nuint drawable, out XScreenSaverInfo info);
+
+        public static TimeSpan? IdleTime(nint d) =>
+            XScreenSaverQueryInfo(d, XDefaultRootWindow(d), out var info) != 0 ? TimeSpan.FromMilliseconds(info.Idle) : null;
 
         [DllImport(Lib)] public static extern nint XOpenDisplay(nint name);
         [DllImport(Lib)] public static extern int XCloseDisplay(nint d);

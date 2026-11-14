@@ -48,9 +48,10 @@ public sealed class VaultService : IDisposable
     public string WebVaultUrl { get; private set; } = "https://vault.bitwarden.com";
     public bool ShowFavicons { get; private set; } = true;
     public UriMatchSettings UriMatch { get; private set; } = UriMatchSettings.Default;
-    public TimeSpan? IdleTimeout { get; private set; }
+    public LockPolicy LockPolicy { get; private set; } = LockPolicy.From(null, null);
 
-    public bool IdleExpired => State == VaultState.Unlocked && IdleTimeout is { } t && DateTime.UtcNow - _lastActivity > t;
+    /// <summary>How long since the bar was last used: shown, typed into or clicked.</summary>
+    public TimeSpan IdleFor => DateTime.UtcNow - _lastActivity;
 
     public void Touch() => _lastActivity = DateTime.UtcNow;
 
@@ -352,9 +353,7 @@ public sealed class VaultService : IDisposable
         WebVaultUrl = s.WebVaultUrl;
         ShowFavicons = s.ShowFavicons;
         UriMatch = s.UriMatch;
-        IdleTimeout = _config.LockAfterMinutes is { } m
-            ? (m > 0 ? TimeSpan.FromMinutes(m) : null)
-            : int.TryParse(s.VaultTimeout, out var minutes) && minutes > 0 ? TimeSpan.FromMinutes(minutes) : null;
+        LockPolicy = LockPolicy.From(_config.LockAfterMinutes, s.VaultTimeout);
     }
 
     private void LoadItems(StoreSnapshot s)

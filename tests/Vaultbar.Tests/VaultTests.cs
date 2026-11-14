@@ -83,7 +83,7 @@ public class VaultTests : IDisposable
     public async Task IdleTimeout_FollowsDesktopSettingUnlessOverridden()
     {
         using var vault = await UnlockedDemo();
-        Assert.Equal(TimeSpan.FromMinutes(15), vault.IdleTimeout);
+        Assert.Equal(TimeSpan.FromMinutes(15), vault.LockPolicy.IdleAfter);
     }
 
     [Fact]

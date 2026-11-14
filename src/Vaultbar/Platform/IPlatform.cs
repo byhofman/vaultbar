@@ -36,6 +36,9 @@ public interface IPlatform : IClipboardAccess, IDisposable
 
     void WatchSystemLock(Action onLock);
 
+    /// <returns>Time since the last keyboard or mouse input in the session, or null where the system does not say.</returns>
+    TimeSpan? SystemIdleTime() => null;
+
     void ExcludeFromCapture(Window window)
     {
     }

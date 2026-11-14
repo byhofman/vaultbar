@@ -71,6 +71,9 @@ internal sealed class MacPlatform(string? pasteboardName = null, string lockNoti
         return new ForeignWindow(app, Ax.FocusedWindowTitle(pid) ?? "", name, pid) { IsBrowser = browser, Address = browser ? MacBrowserAddress.Read(pid) : null };
     }
 
+    public TimeSpan? SystemIdleTime() =>
+        TimeSpan.FromSeconds(Cg.CGEventSourceSecondsSinceLastEventType(Cg.CombinedSessionState, Cg.AnyInputEventType));
+
     public string? BrowserAddress(ForeignWindow browser) => MacBrowserAddress.Read(browser.Pid);
 
     public Vault.IQuickUnlockProvider QuickUnlock { get; } = new MacTouchId(new NativeTouchId(), Path.Combine(Paths.CacheDir, "touch-id-key.dat"));
@@ -339,6 +342,10 @@ internal sealed class MacPlatform(string? pasteboardName = null, string lockNoti
         [DllImport(Lib)] private static extern void CGEventSetFlags(nint ev, ulong flags);
         [DllImport(Lib)] private static extern void CGEventPost(uint tap, nint ev);
         [DllImport(Lib)] public static extern ulong CGEventSourceFlagsState(int stateId);
+        [DllImport(Lib)] public static extern double CGEventSourceSecondsSinceLastEventType(int stateId, uint eventType);
+
+        public const int CombinedSessionState = 0;
+        public const uint AnyInputEventType = uint.MaxValue;
 
         public sealed class Keyboard : IKeyboard
         {

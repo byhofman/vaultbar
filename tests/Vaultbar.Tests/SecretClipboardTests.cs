@@ -85,4 +85,28 @@ public class SecretClipboardTests
         Assert.False(fingerprint.Matches("s3cret "));
         Assert.False(fingerprint.Matches(null));
     }
+
+    [Fact]
+    public async Task ClosingTheBarUnderImmediately_LeavesATimedCopyToItsTimer()
+    {
+        var board = new FakeClipboard();
+        var clipboard = new SecretClipboard(board, 1);
+        var copy = clipboard.CopyAsync("s3cret", sensitive: true);
+
+        await clipboard.ClearUnlessTimedAsync();
+        Assert.Equal("s3cret", board.Text);
+        await copy;
+        Assert.Null(board.Text);
+    }
+
+    [Fact]
+    public async Task ClosingTheBarUnderImmediately_ClearsACopyWithNoTimer()
+    {
+        var board = new FakeClipboard();
+        var clipboard = new SecretClipboard(board, 0);
+        await clipboard.CopyAsync("s3cret", sensitive: true);
+
+        await clipboard.ClearUnlessTimedAsync();
+        Assert.Null(board.Text);
+    }
 }

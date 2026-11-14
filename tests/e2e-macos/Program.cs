@@ -334,8 +334,9 @@ internal static class Program
         Check("system lock notification locks the vault", await UntilAsync(() => vault.State == VaultState.Locked));
 
         await UnlockAgainAsync();
-        Console.WriteLine("waiting for the 1 minute idle lock");
-        Check("idle timeout locks", await UntilAsync(() => vault.State == VaultState.Locked, 90_000));
+        Reopen();
+        Console.WriteLine("waiting for the 1 minute idle lock with the bar open");
+        Check("idle timeout locks while the bar is open", await UntilAsync(() => vault.State == VaultState.Locked, 90_000) && _window.IsVisible);
     }
 
     private static void ClickTray(List<NativeMenuItem> items, string header)
