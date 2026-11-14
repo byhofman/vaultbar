@@ -28,6 +28,7 @@ bash /w/install/install.sh --uninstall
 [ ! -e $HOME/.config/autostart/vaultbar.desktop ] && ok "autostart removed" || ko "autostart removed"
 
 # The published release, so the digest check runs against what GitHub records for a real asset.
-bash /w/install/install.sh --no-start && ok "release download is verified and installs" || ko "release download is verified and installs"
+out=$(bash /w/install/install.sh --no-start 2>&1) && ok "release download is verified and installs" || ko "release download is verified and installs"; echo "$out"
+echo "$out" | grep -qE "predates build attestations|attestation verifies|gh auth login" && ok "the provenance check reports what it did" || ko "the provenance check reports what it did"
 bash /w/install/install.sh --uninstall >/dev/null
 exit $fail
