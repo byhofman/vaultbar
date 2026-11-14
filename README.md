@@ -52,8 +52,8 @@ The keys below are the ones on 1Password's [keyboard shortcuts](https://support.
 | Ctrl+L | lock | lock |
 | F1 / Ctrl+/ | keyboard shortcuts | keyboard shortcuts |
 
-On macOS use ⌘ instead of Ctrl, and ⌥ for Alt. Items with **master password re-prompt** ask for Windows Hello or Touch ID (or the
-master password) once per opening. On the unlock screen, Ctrl+H (macOS ⌘R) retries Windows Hello or Touch ID.
+On macOS use ⌘ instead of Ctrl, and ⌥ for Alt. Items with **master password re-prompt** ask for the master password once per opening, as in
+Bitwarden (or Windows Hello / Touch ID with `repromptWithQuickUnlock`). On the unlock screen, Ctrl+H (macOS ⌘R) retries Windows Hello or Touch ID.
 
 ![Item details](docs/details.png)
 
@@ -159,6 +159,7 @@ vaultbar shortcut     Linux/GNOME: bind the hotkey through GNOME settings
 | `hideFromScreenCapture` | `true` | Keep the search bar out of screenshots, recordings and screen sharing (Windows, macOS) |
 | `windowsHello` | `true` | Offer Windows Hello unlock after a master-password unlock. Turn it on or off later from the tray menu |
 | `touchId` | `true` | The same for Touch ID on macOS |
+| `repromptWithQuickUnlock` | `false` | Let Windows Hello or Touch ID confirm items with master password re-prompt, instead of the master password |
 | `quickUnlockAcrossRestarts` | `false` | Keep the Windows Hello / Touch ID unlock across restarts and reboots instead of asking for the master password once per run |
 | `quickUnlockMaxAgeDays` | `14` | With the above, how many days after the last master-password unlock the stored key still works |
 
@@ -170,14 +171,17 @@ vaultbar shortcut     Linux/GNOME: bind the hotkey through GNOME settings
   HMAC-SHA256) and decrypts organisation and per-item keys. Accounts on Bitwarden's newer "v2" format (COSE keys with
   XChaCha20-Poly1305 or XAES-256-GCM) work too. This is the same scheme the official clients use.
 - It never talks to the Bitwarden server and never writes to the vault. The only network traffic is favicons, which you
-  can turn off. Host names that only exist on a local network (IP addresses, `localhost`, `.local`, `.lan`,
+  can turn off. They come from Bitwarden's icon service or your self-hosted server, never another host
+  named in `data.json`. Host names that only exist on a local network (IP addresses, `localhost`, `.local`, `.lan`,
   `.internal`, `.corp`, names without a dot) are never sent to the icon service.
   A test ([NetworkTests](tests/Vaultbar.Tests/NetworkTests.cs)) fails if any other code could reach the network.
 - Names, usernames and websites are decrypted for search. **Passwords, codes, notes and hidden fields stay encrypted in
-  memory** until you copy, fill or reveal them. Locking zeroes the keys.
+  memory** until you copy, fill or reveal them. Keys sit in memory the garbage collector never moves and the system
+  does not page out, and locking zeroes them; Vaultbar is excluded from crash dumps. A hibernation file, or a debugger
+  running as you while the vault is open, can still see them, as with Bitwarden's own apps.
 - Locks on idle timeout, `vaultbar lock`, Ctrl+L, the tray menu, and on session lock or sleep (Linux: the desktop's
   screen locker over D-Bus, `loginctl lock-session` and suspend). Locking also lets go of every item the bar was showing.
-- Re-prompt items require Windows Hello, Touch ID or the master password again. A password only counts if it unwraps the key the
+- Re-prompt items require the master password again (Windows Hello or Touch ID only with `repromptWithQuickUnlock`). A password only counts if it unwraps the key the
   vault is unlocked with.
 - **Quick unlock lasts until Vaultbar quits.** While it runs, locking keeps the vault's user key in memory, encrypted
   under a random key that never leaves memory, and Windows Hello or Touch ID opens it again. After a restart or a
@@ -222,6 +226,8 @@ vaultbar shortcut     Linux/GNOME: bind the hotkey through GNOME settings
 - **No Linux biometrics yet.** Windows Hello and Touch ID are Vaultbar's own (see above); the desktop app's biometric
   unlock is bound to that app and cannot be shared.
 - Screen-capture hiding is not available on Linux.
+- Auto-type sends keystrokes as a keyboard does, so an app running as you that watches the keyboard sees them, as it
+  would see your typing. When auto-type cannot run, Vaultbar does not copy the password by itself; it shows the copy key.
 - Linux: browser addresses are not read yet, so a browser gets no suggestions and every fill into it asks for a second Enter.
 - Linux, Wayland: auto-type cannot check which window has focus, so it types into whatever has it after the bar closes.
 - Accounts without a master password (SSO with trusted devices or key connector) are not supported.

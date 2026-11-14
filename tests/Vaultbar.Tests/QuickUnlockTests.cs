@@ -26,7 +26,7 @@ public class QuickUnlockTests : IDisposable
         public string Name => "Fake Hello";
         public Task<bool> IsAvailableAsync() => Task.FromResult(true);
 
-        public Task<(QuickUnlockStatus Status, byte[]? Signature)> SignAsync(byte[] challenge, bool createKey)
+        public Task<(QuickUnlockStatus Status, byte[]? Signature)> SignAsync(string account, byte[] challenge, bool createKey)
         {
             Prompts++;
             if (createKey) Secret = RandomNumberGenerator.GetBytes(32);
@@ -35,7 +35,7 @@ public class QuickUnlockTests : IDisposable
                 : (Next, null));
         }
 
-        public Task DeleteKeyAsync()
+        public Task DeleteKeyAsync(string account)
         {
             Deleted = true;
             return Task.CompletedTask;

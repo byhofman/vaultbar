@@ -6,19 +6,20 @@ public sealed class SymmetricKey : IDisposable
 {
     private readonly byte[]? _encoded;
 
+    /// <summary>Takes the arrays over: their bytes move to locked memory and the arrays passed in are zeroed.</summary>
     public SymmetricKey(byte[] enc, byte[]? mac)
     {
-        Enc = enc;
-        Mac = mac;
+        Enc = LockedMemory.Adopt(enc);
+        Mac = mac is null ? null : LockedMemory.Adopt(mac);
         Algorithm = mac is null ? KeyAlgorithm.AesCbc : KeyAlgorithm.AesCbcHmac;
     }
 
     internal SymmetricKey(byte[] enc, KeyAlgorithm algorithm, byte[] keyId, byte[] encoded)
     {
-        Enc = enc;
+        Enc = LockedMemory.Adopt(enc);
         Algorithm = algorithm;
         KeyId = keyId;
-        _encoded = encoded;
+        _encoded = LockedMemory.Adopt(encoded);
     }
 
     public byte[] Enc { get; }
@@ -35,7 +36,15 @@ public sealed class SymmetricKey : IDisposable
     };
 
     /// <summary>The same bytes <see cref="FromBytes"/> takes.</summary>
-    public byte[] ToBytes() => _encoded is { } encoded ? encoded.ToArray() : Mac is null ? Enc.ToArray() : [.. Enc, .. Mac];
+    public byte[] ToBytes()
+    {
+        if (_encoded is { } encoded) return LockedMemory.Copy(encoded);
+        if (Mac is null) return LockedMemory.Copy(Enc);
+        var both = LockedMemory.Copy(new byte[Enc.Length + Mac.Length]);
+        Enc.CopyTo(both, 0);
+        Mac.CopyTo(both, Enc.Length);
+        return both;
+    }
 
     public void Dispose()
     {

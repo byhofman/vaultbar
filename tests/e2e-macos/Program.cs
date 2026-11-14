@@ -247,7 +247,7 @@ internal static class Program
     private static async Task FillAndOpenAsync()
     {
         N.Key(N.Enter, "\r");
-        Check("Enter without Accessibility falls back to copying", await UntilAsync(() => Toast.Contains("Can't auto-type")), Toast);
+        Check("Enter without Accessibility offers the copy key and copies nothing", await UntilAsync(() => Toast.Contains("Can't auto-type") && Toast.Contains("⌘+⇧+C")) && Clipboard != "gh-Secr3t!pass", Toast);
 
         Find<TextBox>("SearchBox").Text = "github";
         await UntilAsync(() => Rows.FirstOrDefault()?.Title == "GitHub");
