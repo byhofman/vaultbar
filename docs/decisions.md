@@ -2,6 +2,15 @@
 
 Non-obvious choices a reader could not predict from the code. Newest first.
 
+## D-13 Tmds.DBus.Protocol comes from Avalonia only — 2026-11-15
+
+Dependabot bumped the direct Tmds.DBus.Protocol reference from 0.21.3 to 0.95.2, and the build broke on all three
+systems because 0.93 removed `Connection`. Porting the session-lock code to the new API would only have moved the break:
+Avalonia 11.3 is compiled against 0.21.3, so its Linux backend would load a library without the types it calls. The app
+now has no reference of its own and takes the version Avalonia brings (0.21.3 is the patched release of GHSA-xrw6-gwf8-vvr9),
+and a test fails if the shipped copy ever differs from the one Avalonia was built against. Moving to 0.9x comes with
+Avalonia 12, which needs 0.94.
+
 ## D-12 Installers look up the release with GITHUB_TOKEN when it is set — 2026-11-14
 
 The installers read the release from the GitHub API to get the asset digest. Anonymous API calls are limited to 60 an
