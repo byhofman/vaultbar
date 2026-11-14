@@ -46,6 +46,7 @@ jobs:
           APPLE_ID: ${{ github.ref_type == 'tag' && secrets.APPLE_ID || '' }}
           APPLE_TEAM_ID: ${{ github.ref_type == 'tag' && secrets.APPLE_TEAM_ID || '' }}
           APPLE_APP_PASSWORD: ${{ github.ref_type == 'tag' && secrets.APPLE_APP_PASSWORD || '' }}
+          APPLE_PROVISIONING_PROFILE: ${{ github.ref_type == 'tag' && secrets.APPLE_PROVISIONING_PROFILE || '' }}
         run: packaging/macos/package.sh dist osx-arm64 osx-x64
 
       - name: Disk image
