@@ -4,8 +4,17 @@
 #   curl -fsSL https://raw.githubusercontent.com/byhofman/vaultbar/main/install/install-macos.sh | zsh -s -- --uninstall
 # Options: --uninstall  --version vX.Y.Z  --archive path.tar.gz [--sha256 hex]  --repo owner/name  --no-start  --dir path
 # A download is checked against the SHA-256 digest GitHub records for the release asset, and refused if it differs.
+# Once releases are signed (team_id below), the app must carry that Developer ID and pass Gatekeeper, or nothing is
+# installed. Until then the build is unsigned: with GitHub CLI signed in, its build attestation must verify instead.
 # GITHUB_TOKEN, when set, authenticates the release lookup; anonymous lookups share a 60-an-hour limit per IP address.
 set -euo pipefail
+
+# The Apple Team ID that signs Vaultbar releases: empty until a Developer ID exists (VBR-8). VAULTBAR_EXPECT_TEAM_ID
+# only exists so the tests can switch the signed path on against an unsigned build.
+team_id=""
+[[ -n $team_id ]] || team_id=${VAULTBAR_EXPECT_TEAM_ID:-}
+# The first release built with an attestation; older ones have none to check.
+first_attested=0.4.0
 
 repo="byhofman/vaultbar" version="latest" archive="" expected="" uninstall=0 start=1 apps=""
 while (( $# > 0 )); do
@@ -63,6 +72,7 @@ if [[ -z $archive ]]; then
   tag=$(print -r -- "$tokens" | sed -n 's/^"tag_name": *"\(.*\)"$/\1/p' | head -n 1)
   expected=$(print -r -- "$tokens" | awk -v want="\"name\": \"$asset\"" 'found && /^"digest"/ { sub(/.*"sha256:/, ""); sub(/"$/, ""); print; exit } $0 == want { found = 1 }')
   [[ -n $tag && -n $expected ]] || { print -u2 "Release $version has no $asset with a SHA-256 digest."; exit 1; }
+  release_tag=$tag
   archive="$tmp/$asset"
   print "Downloading $asset ($tag)"
   curl -fsSL "https://github.com/$repo/releases/download/$tag/$asset" -o "$archive"
@@ -76,14 +86,47 @@ if [[ -n $expected ]]; then
 fi
 tar -xzf "$archive" -C "$tmp"
 
+older_than() { # older_than 0.3.1 0.4.0
+  local a=(${(s:.:)1}) b=(${(s:.:)2}) i
+  for i in 1 2 3; do (( ${a[i]:-0} < ${b[i]:-0} )) && return 0; (( ${a[i]:-0} > ${b[i]:-0} )) && return 1; done
+  return 1
+}
+
+if [[ -n $team_id ]]; then
+  # Signed releases: the Developer ID must be ours and Gatekeeper must accept the app, notarization included.
+  refuse() { print -u2 "$1 Nothing was installed."; exit 1; }
+  codesign --verify --deep --strict "$tmp/Vaultbar.app" 2>/dev/null || refuse "The app's signature does not verify."
+  signer=$(codesign -dv --verbose=2 "$tmp/Vaultbar.app" 2>&1 | sed -n 's/^TeamIdentifier=//p')
+  [[ $signer == "$team_id" ]] || refuse "The app is not signed by Vaultbar's Developer ID ($team_id; found ${signer:-none})."
+  spctl --assess --type execute "$tmp/Vaultbar.app" 2>/dev/null || refuse "Gatekeeper does not accept the app."
+  print "Signed by Developer ID $team_id and accepted by Gatekeeper."
+else
+  print "Unsigned build: macOS cannot check who made it."
+  if [[ -n ${release_tag:-} ]] && older_than "${release_tag#v}" $first_attested; then
+    print "$release_tag predates build attestations, so only its SHA-256 digest was checked."
+  elif [[ -n ${release_tag:-} ]] && command -v gh >/dev/null && { [[ -n ${GH_TOKEN:-}${GITHUB_TOKEN:-} ]] || gh auth status >/dev/null 2>&1; }; then
+    GH_TOKEN=${GH_TOKEN:-${GITHUB_TOKEN:-}} gh attestation verify "$archive" --repo "$repo" --signer-workflow "$repo/.github/workflows/release.yml" \
+      --source-ref "refs/tags/$release_tag" --deny-self-hosted-runners >/dev/null 2>"$tmp/attestation.log" \
+      || { cat "$tmp/attestation.log" >&2; print -u2 "The build attestation of $asset does not verify. Nothing was installed."; exit 1; }
+    print "Its build attestation verifies: built by $repo's release workflow from $release_tag."
+  elif [[ -n ${release_tag:-} ]]; then
+    print "Install GitHub CLI and sign in (gh auth login) to have its build attestation checked too."
+  else
+    print "A local archive: check its build attestation yourself with gh attestation verify <file> --repo $repo."
+  fi
+fi
+
 stop_running
 mkdir -p "$apps"
 rm -rf "$app"
 mv "$tmp/Vaultbar.app" "$app"
 chmod +x "$exe"
-xattr -dr com.apple.quarantine "$app" 2>/dev/null || true
-# A Developer ID signature is kept: replacing it would undo the notarization and the Accessibility grant.
-codesign -dv "$app" 2>&1 | grep -q '^Authority=Developer ID' || codesign --force --deep --sign - "$app" >/dev/null 2>&1
+if [[ -z $team_id ]]; then
+  # An unsigned build only opens without quarantine and with a local signature. A signed one keeps both, so Gatekeeper
+  # still checks it at first launch.
+  xattr -dr com.apple.quarantine "$app" 2>/dev/null || true
+  codesign --force --deep --sign - "$app" >/dev/null 2>&1
+fi
 
 mkdir -p "${link:h}"
 ln -sf "$exe" "$link"

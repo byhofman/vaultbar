@@ -22,6 +22,8 @@ trap 'stop; rm -rf "$sandbox"' EXIT
 
 check "a wrong checksum is refused" zsh -c "! zsh '$script' --archive '$archive' --sha256 $(printf '0%.0s' {1..64}) --dir '$apps' --no-start"
 check "nothing is installed after a refused checksum" test ! -e "$apps/Vaultbar.app"
+check "with a Team ID set, an unsigned build is refused" zsh -c "! VAULTBAR_EXPECT_TEAM_ID=ABCDE12345 zsh '$script' --archive '$archive' --dir '$apps' --no-start"
+check "nothing is installed after a refused signature" test ! -e "$apps/Vaultbar.app"
 zsh "$script" --archive "$archive" --sha256 "$(shasum -a 256 "$archive" | cut -d" " -f1)" --dir "$apps" --no-start >/dev/null
 check "install succeeds" test -x "$exe"
 check "bundle signature verifies" codesign --verify --deep --strict "$apps/Vaultbar.app"

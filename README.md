@@ -92,7 +92,7 @@ Privacy & Security › Open Anyway** once; the one-liner above does not.
 | | Windows | Linux | macOS |
 | --- | --- | --- | --- |
 | Installs to | `%LOCALAPPDATA%\Programs\Vaultbar\vaultbar.exe` | `~/.local/bin/vaultbar` | `/Applications/Vaultbar.app` (or `~/Applications`), CLI link in `~/.local/bin` |
-| Also | Start-menu shortcut, adds itself to the user `PATH` | GNOME on Wayland: binds the shortcut | Clears the download quarantine, ad-hoc signs the app |
+| Also | Start-menu shortcut, adds itself to the user `PATH` | GNOME on Wayland: binds the shortcut | While releases are unsigned: clears the download quarantine, ad-hoc signs the app |
 
 **Uninstall**
 
@@ -219,7 +219,12 @@ vaultbar shortcut     Linux/GNOME: bind the hotkey through GNOME settings
 - Nothing secret is logged. The log (`vaultbar.log` in the cache folder) records errors as exception types and codes,
   never messages, names or values.
 - The installers check every download against the SHA-256 digest GitHub records for the release asset and refuse a
-  mismatch. Releases also carry build provenance: `gh attestation verify <file> --repo byhofman/vaultbar`.
+  mismatch. That proves the file is the one in the release, not who built it. **Releases are not signed yet**, and the
+  installers say so ("Unsigned build"). With GitHub CLI signed in, they also check the build attestation (that the file
+  came from this repository's release workflow at that tag) and refuse one that does not verify; releases before v0.4.0
+  have none. Once releases are signed, the installers refuse anything not signed by Vaultbar's Developer ID (macOS,
+  with Gatekeeper's check) or Authenticode subject (Windows), and stop clearing the quarantine and the mark of the web.
+  To check a file yourself: `gh attestation verify <file> --repo byhofman/vaultbar`.
 
 ## Limitations
 

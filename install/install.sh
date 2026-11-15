@@ -8,6 +8,8 @@
 set -euo pipefail
 
 repo="byhofman/vaultbar" version="latest" archive="" expected="" uninstall=0 start=1
+# The first release built with an attestation; older ones have none to check.
+first_attested=0.4.0
 bin_dir="${XDG_BIN_HOME:-$HOME/.local/bin}"
 while [ $# -gt 0 ]; do
   case "$1" in
@@ -73,6 +75,7 @@ if [ -z "$archive" ]; then
   tag=$(echo "$tokens" | sed -n 's/^"tag_name": *"\(.*\)"$/\1/p' | head -n 1)
   expected=$(echo "$tokens" | awk -v want="\"name\": \"$asset\"" 'found && /^"digest"/ { sub(/.*"sha256:/, ""); sub(/"$/, ""); print; exit } $0 == want { found = 1 }')
   [ -n "$tag" ] && [ -n "$expected" ] || { echo "Release $version has no $asset with a SHA-256 digest." >&2; exit 1; }
+  release_tag=$tag
   archive="$tmp/$asset"
   echo "Downloading $asset ($tag)"
   fetch "https://github.com/$repo/releases/download/$tag/$asset" "$archive"
@@ -85,6 +88,23 @@ if [ -n "$expected" ]; then
   fi
 fi
 tar -xzf "$archive" -C "$tmp"
+
+# Linux builds are not signed; with GitHub CLI signed in, the build attestation must verify instead.
+older_than() { # older_than 0.3.1 0.4.0
+  [ "$1" != "$2" ] && [ "$(printf '%s\n%s\n' "$1" "$2" | sort -t. -k1,1n -k2,2n -k3,3n | head -n 1)" = "$1" ]
+}
+if [ -z "${release_tag:-}" ]; then
+  echo "A local archive: check its build attestation yourself with gh attestation verify <file> --repo $repo."
+elif older_than "${release_tag#v}" "$first_attested"; then
+  echo "$release_tag predates build attestations, so only its SHA-256 digest was checked."
+elif command -v gh >/dev/null 2>&1 && { [ -n "${GH_TOKEN:-}${GITHUB_TOKEN:-}" ] || gh auth status >/dev/null 2>&1; }; then
+  GH_TOKEN=${GH_TOKEN:-${GITHUB_TOKEN:-}} gh attestation verify "$archive" --repo "$repo" --signer-workflow "$repo/.github/workflows/release.yml" \
+    --source-ref "refs/tags/$release_tag" --deny-self-hosted-runners >/dev/null 2>"$tmp/attestation.log" \
+    || { cat "$tmp/attestation.log" >&2; echo "The build attestation of $asset does not verify. Nothing was installed." >&2; exit 1; }
+  echo "Its build attestation verifies: built by $repo's release workflow from $release_tag."
+else
+  echo "Install GitHub CLI and sign in (gh auth login) to have its build attestation checked too."
+fi
 
 stop_running
 mkdir -p "$bin_dir"

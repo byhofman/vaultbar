@@ -2,6 +2,21 @@
 
 Non-obvious choices a reader could not predict from the code. Newest first.
 
+## D-18 Installers verify the signer once one exists, and the attestation until then — 2026-11-15
+
+The digest check proves integrity, not origin, because the digest comes from the same release (H2). The installers now
+carry the expected signer as a constant: the Apple Team ID in `install-macos.sh` and the Authenticode subject in
+`install.ps1`, both empty until VBR-8 and Windows signing deliver one. Set, they refuse an app whose signature does not
+verify, is not that Team ID or subject, or (macOS) that Gatekeeper rejects, and they stop stripping quarantine,
+re-signing ad hoc and running `Unblock-File`. Empty, they say "Unsigned build" and, when GitHub CLI is signed in, run
+`gh attestation verify` pinned to this repository, the release workflow, the tag and GitHub-hosted runners, failing
+closed. v0.3.1 and earlier predate attestations, so for those only the digest is checked; a local `--archive` is the
+user's own file and gets a pointer to the command. The test hooks `VAULTBAR_EXPECT_TEAM_ID` and `VAULTBAR_EXPECT_SIGNER`
+only apply while the constant is empty, so they can switch the check on but never off. Windows now builds on the Windows
+runner, where Azure Artifact Signing (the account set up on 2026-11-07, OIDC, no secret) signs on a tag once
+`SIGNING_ENABLED` is true; pipeline-templates' `sign-windows` cannot be used because that repository is private and
+this one is public, so the same two actions are called directly, pinned by SHA.
+
 ## D-17 The review's low findings, how each was closed — 2026-11-15
 
 L1: key buffers, the quick-unlock sealing key among them, are allocated on the pinned object heap and locked in RAM
