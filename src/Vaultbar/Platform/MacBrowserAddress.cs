@@ -19,7 +19,7 @@ internal static unsafe class MacBrowserAddress
     private const int MaxElements = 1500, KAxValueCgSizeType = 2;
 
     private static readonly nint Children = Retained("AXChildren"), Role = Retained("AXRole"), Url = Retained("AXURL");
-    private static readonly nint FocusedElement = Retained("AXFocusedUIElement"), Parent = Retained("AXParent");
+    private static readonly nint FocusedElement = Retained("AXFocusedUIElement"), Parent = Retained("AXParent"), Windows = Retained("AXWindows");
     private static readonly nint Size = Retained("AXSize"), FocusedWindow = Retained("AXFocusedWindow"), MainWindow = Retained("AXMainWindow");
     private static readonly nint WebArea = Retained("AXWebArea"), ManualAccessibility = Retained("AXManualAccessibility");
 
@@ -91,7 +91,13 @@ internal static unsafe class MacBrowserAddress
             AXUIElementSetMessagingTimeout(app, (float)budget.TotalSeconds);
             // Chromium browsers build their web accessibility tree only for assistive apps that ask for it this way. Asked
             // on every read: a browser that was asked before its window existed never builds it (seen on Chrome and Edge).
-            if (askForWebTree) AXUIElementSetAttributeValue(app, ManualAccessibility, ObjC.Send(ObjC.Class("NSNumber"), ObjC.Sel("numberWithBool:"), 1));
+            if (askForWebTree)
+            {
+                AXUIElementSetAttributeValue(app, ManualAccessibility, ObjC.Send(ObjC.Class("NSNumber"), ObjC.Sel("numberWithBool:"), 1));
+                // Newer Chromium no longer knows AXManualAccessibility; it turns its page tree on once an assistive app
+                // has asked for its windows, which is what the diagnostics did when the page appeared.
+                if (AXUIElementCopyAttributeValue(app, Windows, out var windows) == 0 && windows != 0) CFRelease(windows);
+            }
             return read(app);
         }
         finally
