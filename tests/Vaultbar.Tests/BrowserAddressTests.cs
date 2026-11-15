@@ -190,8 +190,15 @@ public sealed class BrowserAddressTests : IDisposable
     private static string Run(string file, params string[] args)
     {
         using var p = Process.Start(new ProcessStartInfo(file, args) { RedirectStandardOutput = true, RedirectStandardError = true })!;
-        p.WaitForExit(15000);
-        return (p.StandardOutput.ReadToEnd() + p.StandardError.ReadToEnd()).Trim();
+        var output = p.StandardOutput.ReadToEndAsync();
+        var errors = p.StandardError.ReadToEndAsync();
+        // A diagnostic must never hang the run: osascript can wait on a permission prompt nobody answers.
+        if (!p.WaitForExit(15000))
+        {
+            p.Kill(entireProcessTree: true);
+            return "(timed out)";
+        }
+        return (output.Result + errors.Result).Trim();
     }
 
     [System.Runtime.InteropServices.DllImport("/System/Library/Frameworks/ApplicationServices.framework/ApplicationServices", EntryPoint = "AXIsProcessTrusted")]
