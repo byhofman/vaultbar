@@ -14,6 +14,8 @@
           <SolidColorBrush x:Key="BqText" Color="#1A1F27" />
           <SolidColorBrush x:Key="BqMuted" Color="#667285" />
           <SolidColorBrush x:Key="BqAccent" Color="#175DDC" />
+          <!-- The yellow of the Vaultbar mark, used only as a small hint: the bar beside the selected row. -->
+          <SolidColorBrush x:Key="BqBrand" Color="#F4C542" />
           <SolidColorBrush x:Key="BqSelected" Color="#E7EEFC" />
           <SolidColorBrush x:Key="BqHover" Color="#F2F5F9" />
           <SolidColorBrush x:Key="BqKbd" Color="#E7EBF0" />
@@ -27,6 +29,7 @@
           <SolidColorBrush x:Key="BqText" Color="#E8ECF1" />
           <SolidColorBrush x:Key="BqMuted" Color="#8F9AAB" />
           <SolidColorBrush x:Key="BqAccent" Color="#7DA4F6" />
+          <SolidColorBrush x:Key="BqBrand" Color="#F4C542" />
           <SolidColorBrush x:Key="BqSelected" Color="#283958" />
           <SolidColorBrush x:Key="BqHover" Color="#272D36" />
           <SolidColorBrush x:Key="BqKbd" Color="#313843" />
@@ -82,12 +85,15 @@
     <Style Selector="Border.row">
       <Setter Property="Background" Value="Transparent" />
       <Setter Property="CornerRadius" Value="8" />
+      <Setter Property="BorderThickness" Value="3,0,0,0" />
+      <Setter Property="BorderBrush" Value="Transparent" />
     </Style>
     <Style Selector="Border.row:pointerover">
       <Setter Property="Background" Value="{DynamicResource BqHover}" />
     </Style>
     <Style Selector="Border.row.selected">
       <Setter Property="Background" Value="{DynamicResource BqSelected}" />
+      <Setter Property="BorderBrush" Value="{DynamicResource BqBrand}" />
     </Style>
 
     <Style Selector="TextBlock.section">

@@ -2,6 +2,22 @@
 
 Non-obvious choices a reader could not predict from the code. Newest first.
 
+## D-21 Downloads are watched from the cluster, the app reports nothing — 2026-11-15
+
+VBR-21 asks for the download page and the release downloads to be watched, with an alert, and no telemetry from the app.
+The watching lives in gitops (decision 40 there, gitops#184): Alloy's blackbox prober checks the website's Vaultbar page,
+the eight assets of the latest release with HEAD requests, and the three one-line installers, and Grafana raises
+`VaultbarDownloadDown` when one fails for five minutes. Nothing changes in Vaultbar itself, and the VBR-16 network test
+still holds. The page check can only say the site is up, since byhofman.dev serves one shell for every path. The release
+API is not probed, because the installers need its anonymous quota.
+
+## D-20 The brand hint is the mark's yellow beside the selected row — 2026-11-15
+
+The interface already uses the mark's blue as its accent (caret, header icon, links), so the logo colour that was
+missing is the yellow of the key (#F4C542). It appears in one place only: a 3 px bar on the left of the selected row,
+in both themes, which also makes the selection easier to see at a glance. Row padding shrinks by the same 3 px so
+nothing moves. No screen changes, so there was nothing to prototype; the macOS end-to-end screenshots show it.
+
 ## D-19 Touch ID moves into the keychain with the Developer ID; Windows keeps a residual — 2026-11-15
 
 M3: any process running as the user can load the Touch ID key blob from its file and ask for a touch with it, and can
