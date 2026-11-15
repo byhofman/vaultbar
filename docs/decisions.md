@@ -2,6 +2,24 @@
 
 Non-obvious choices a reader could not predict from the code. Newest first.
 
+## D-16 Quick unlock lives as long as the process; across restarts only by opt-in — 2026-11-15
+
+The user key used to sit on disk, wrapped under the device key, with no lifetime: after a reboot Windows Hello or Touch
+ID alone opened the vault, even after the account was signed out of the desktop app (M2). Bitwarden asks for the
+master password after a restart by default ([help](https://bitwarden.com/help/biometrics/)). Now locking keeps the key
+in memory, sealed under a random per-process key held beside it (so it is a lock against nothing but a casual read of
+memory, as Bitwarden's in-memory biometric key is), and the disk holds only the challenge and a verifier: an HKDF of the
+device signature bound to the account and the user key, so a quick unlock is accepted only when the device signs to
+the same value and the key it opens is the enrolled one. `quickUnlockAcrossRestarts` (off by default; recorded here as
+the opt-in the finding asks for) adds the wrapped key on disk, with the master-password time it dates from bound in as
+associated data, valid for `quickUnlockMaxAgeDays` (14, clamped to 1-365) after that unlock and never for a time more
+than a day ahead. The same age ends the in-process key, so the master password is asked for at least that often. A
+quick unlock never extends it, and the key is re-stored at the next quick unlock after a password unlock, so no extra
+prompt appears. Turning the option off strips the key at the next read. An account missing from
+`global_account_accounts`, a sign-out of the last account, or a deleted `data.json` removes the enrollment and the
+in-memory key; an account switch drops the in-memory key. Enrollments from before this change carry no age, so they are
+deleted the first time Vaultbar looks at them, and Vaultbar offers to set quick unlock up again.
+
 ## D-15 Bitwarden's vault timeout, value by value — 2026-11-15
 
 Only a positive number of minutes used to count; "Immediately", "On system idle", "never" and the legacy negatives all
