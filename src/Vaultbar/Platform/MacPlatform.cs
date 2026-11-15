@@ -67,8 +67,14 @@ internal sealed class MacPlatform(string? pasteboardName = null, string lockNoti
         _lastTarget = app;
 
         var name = ObjC.ToManaged(ObjC.Send(app, ObjC.Sel("localizedName"))) ?? "";
-        return new ForeignWindow(app, Ax.FocusedWindowTitle(pid) ?? "", name, pid);
+        var known = Browsers.IsBrowserBundle(ObjC.ToManaged(ObjC.Send(app, ObjC.Sel("bundleIdentifier"))));
+        var address = MacBrowserAddress.Read(pid, known);
+        // An app not on the list that shows a web page is treated as the browser it is.
+        var browser = known || Browsers.IsWebAddress(address);
+        return new ForeignWindow(app, Ax.FocusedWindowTitle(pid) ?? "", name, pid) { IsBrowser = browser, Address = browser ? address : null, KnownBrowser = known };
     }
+
+    public string? BrowserAddress(ForeignWindow browser) => MacBrowserAddress.Read(browser.Pid, browser.KnownBrowser);
 
     public Vault.IQuickUnlockProvider QuickUnlock { get; } = new MacTouchId(new NativeTouchId(), Path.Combine(Paths.CacheDir, "touch-id-key.dat"));
 
@@ -145,8 +151,19 @@ internal sealed class MacPlatform(string? pasteboardName = null, string lockNoti
         if (!ok) return AutoTypeResult.TargetNotFocused;
         await Task.Delay(80);
 
-        // NSRunningApplication returns its properties atomically, so the check is safe off the main thread.
-        return await Task.Run(() => AutoTyper.Run(steps, new Cg.Keyboard(), () => ObjC.SendBool(target.Handle, ObjC.Sel("isActive"))));
+        // The window too, not only the app: another window of the same browser (a pop-up from another tab) taking focus
+        // halfway must not get the rest of the password.
+        var window = Ax.FocusedWindow(target.Pid);
+        try
+        {
+            // NSRunningApplication returns its properties atomically, so the check is safe off the main thread.
+            return await Task.Run(() => AutoTyper.Run(steps, new Cg.Keyboard(),
+                () => ObjC.SendBool(target.Handle, ObjC.Sel("isActive")) && (window == 0 || Ax.IsFocusedWindow(target.Pid, window))));
+        }
+        finally
+        {
+            if (window != 0) Ax.CFRelease(window);
+        }
     }
 
     internal static readonly string[] ConcealedMarkers = ["org.nspasteboard.ConcealedType", "org.nspasteboard.TransientType"];
@@ -293,6 +310,41 @@ internal sealed class MacPlatform(string? pasteboardName = null, string lockNoti
             var yes = ObjC.Send(ObjC.Class("NSNumber"), ObjC.Sel("numberWithBool:"), 1);
             var options = ObjC.Send(ObjC.Class("NSDictionary"), ObjC.Sel("dictionaryWithObject:forKey:"), yes, ObjC.NSString("AXTrustedCheckOptionPrompt"));
             AXIsProcessTrustedWithOptions(options);
+        }
+
+        [DllImport(Cf)] private static extern byte CFEqual(nint a, nint b);
+
+        // Kept, since the check runs before every keystroke on a thread without an autorelease pool.
+        private static readonly nint FocusedWindowAttribute = ObjC.Send(ObjC.NSString("AXFocusedWindow"), ObjC.Sel("retain"));
+
+        /// <returns>The app's focused window, retained, or 0.</returns>
+        public static nint FocusedWindow(int pid)
+        {
+            if (AXIsProcessTrusted() == 0) return 0;
+            var app = AXUIElementCreateApplication(pid);
+            if (app == 0) return 0;
+            try
+            {
+                return AXUIElementCopyAttributeValue(app, FocusedWindowAttribute, out var window) == 0 ? window : 0;
+            }
+            finally
+            {
+                CFRelease(app);
+            }
+        }
+
+        public static bool IsFocusedWindow(int pid, nint window)
+        {
+            var now = FocusedWindow(pid);
+            if (now == 0) return false;
+            try
+            {
+                return CFEqual(now, window) != 0;
+            }
+            finally
+            {
+                CFRelease(now);
+            }
         }
 
         public static string? FocusedWindowTitle(int pid)

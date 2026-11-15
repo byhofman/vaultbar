@@ -97,34 +97,6 @@ public class VaultTests : IDisposable
         Assert.Empty(Matcher.Search(vault.Items, "zzzz", usage));
     }
 
-    [Fact]
-    public async Task Suggest_MatchesBrowserTitleAgainstItemDomains()
-    {
-        using var vault = await UnlockedDemo();
-        var window = new ForeignWindow(0, "Sign in to GitHub · GitHub - Google Chrome", "chrome");
-        Assert.Equal("GitHub", Matcher.Suggest(vault.Items, window, new UsageStore()).First().Name);
-        var bank = new ForeignWindow(0, "Log in | Bank of Example - Mozilla Firefox", "firefox");
-        Assert.Contains(Matcher.Suggest(vault.Items, bank, new UsageStore()), i => i.Name == "Bank of Example");
-    }
-
-    [Theory]
-    [InlineData("Pull requests · contoso/app - Google Chrome", "chrome")]
-    [InlineData("Dashboard - Work - Microsoft​ Edge", "msedge")]
-    [InlineData("New Tab - Google Chrome", "chrome")]
-    public async Task Suggest_IgnoresBrowserBranding(string title, string app)
-    {
-        using var vault = await UnlockedDemo();
-        Assert.DoesNotContain(Matcher.Suggest(vault.Items, new ForeignWindow(0, title, app), new UsageStore()), i => i.Name is "Gmail" or "Microsoft 365");
-    }
-
-    [Fact]
-    public async Task Suggest_KeepsSiteNameBeforeBrowserSuffix()
-    {
-        using var vault = await UnlockedDemo();
-        var window = new ForeignWindow(0, "Sign in – Google Accounts - Google Chrome", "chrome");
-        Assert.Contains(Matcher.Suggest(vault.Items, window, new UsageStore()), i => i.Name == "Gmail");
-    }
-
     [Theory]
     [InlineData(1_000, null, null, KdfType.Pbkdf2)]
     [InlineData(5_000_000, null, null, KdfType.Pbkdf2)]

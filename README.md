@@ -189,6 +189,11 @@ vaultbar shortcut     Linux/GNOME: bind the hotkey through GNOME settings
   Copies stay out of clipboard history and off other devices where the system allows it: on Windows they skip clipboard history and cloud clipboard, on macOS they stay off
   Universal Clipboard and carry the concealed and transient markers clipboard managers honour, on KDE the password hint.
   The search bar is hidden from screen capture.
+- In a browser, suggestions and auto-type go by the page's address, matched with Bitwarden's URI rules (base domain,
+  host, starts with, exact, regular expression, never; your default match setting and equivalent domains), never by
+  the window title, which the page writes itself. Vaultbar reads the address from the browser's accessibility tree (on
+  macOS this needs the Accessibility permission auto-type already uses). When the address cannot be read, or is not one
+  of the item's websites, Enter shows the host and fills only on a second Enter. Other apps are matched by their title.
 - Auto-type checks before every keystroke that the window it is typing into still has focus, and stops the moment
   another window takes it (Windows, macOS, Linux X11; Wayland does not let apps see focus). It never types into the
   taskbar, desktop or Start.
@@ -209,6 +214,9 @@ vaultbar shortcut     Linux/GNOME: bind the hotkey through GNOME settings
 - **No Linux biometrics yet.** Windows Hello and Touch ID are Vaultbar's own (see above); the desktop app's biometric
   unlock is bound to that app and cannot be shared.
 - Screen-capture hiding is not available on Linux.
+- Firefox on macOS does not give Vaultbar a page address it can trust, so it gets no suggestions and every fill into it
+  asks for a second Enter. Firefox on Windows works.
+- Linux: browser addresses are not read yet, so a browser gets no suggestions and every fill into it asks for a second Enter.
 - Linux, Wayland: auto-type cannot check which window has focus, so it types into whatever has it after the bar closes.
 - Accounts without a master password (SSO with trusted devices or key connector) are not supported.
 - Organisation items are tested against a synthetic vault and the Bitwarden SDK's RSA test vectors, not yet against a real organisation vault. Items of provider-managed organisations are not decrypted; they count as failed and the rest of the vault opens.

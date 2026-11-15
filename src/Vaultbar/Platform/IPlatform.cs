@@ -10,6 +10,9 @@ public interface IPlatform : IClipboardAccess, IDisposable
 
     ForeignWindow? CaptureForeground();
 
+    /// <returns>The address of the page the browser window shows now, or null when it cannot be read.</returns>
+    string? BrowserAddress(ForeignWindow browser) => null;
+
     PixelPoint? AnchorPoint(ForeignWindow? target);
 
     void AttachWindow(Window window);

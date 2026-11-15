@@ -116,7 +116,7 @@ public sealed class VaultFixture
     }
 
     public string AddLogin(string name, string? username, string? password, string[]? uris = null, string? totp = null,
-        bool favorite = false, bool reprompt = false, bool itemKey = false, string? folderId = null, string? notes = null)
+        bool favorite = false, bool reprompt = false, bool itemKey = false, string? folderId = null, string? notes = null, int?[]? matches = null)
     {
         var id = Guid.NewGuid().ToString();
         var key = _userKey;
@@ -145,7 +145,7 @@ public sealed class VaultFixture
                 ["username"] = Enc(username, key),
                 ["password"] = Enc(password, key),
                 ["totp"] = Enc(totp, key),
-                ["uris"] = new JsonArray((uris ?? []).Select(u => (JsonNode)new JsonObject { ["uri"] = Enc(u, key), ["match"] = null }).ToArray()),
+                ["uris"] = new JsonArray((uris ?? []).Select((u, i) => (JsonNode)new JsonObject { ["uri"] = Enc(u, key), ["match"] = matches?[i] }).ToArray()),
             },
             ["fields"] = new JsonArray(new JsonObject { ["name"] = Enc("Recovery PIN", key), ["value"] = Enc("4711", key), ["type"] = 1 }),
         };
@@ -195,6 +195,11 @@ public sealed class VaultFixture
         _ciphers[id] = new JsonObject { ["id"] = id, ["type"] = 2, ["name"] = Enc(name, _userKey), ["deletedDate"] = "2026-01-01T00:00:00Z" };
     }
 
+    /// <summary>Bitwarden's "default URI match detection" setting; null leaves it out, as an account that never changed it.</summary>
+    public int? DefaultUriMatch { get; set; }
+
+    public string[][]? EquivalentDomains { get; set; }
+
     public void Write(string path, string password, int iterations = 5000)
     {
         var masterKey = MasterKey.Derive(password, Email, new KdfConfig(KdfType.Pbkdf2, iterations, null, null));
@@ -217,6 +222,9 @@ public sealed class VaultFixture
             [$"user_{uid}_sync_lastSync"] = DateTimeOffset.UtcNow.AddMinutes(-3).ToString("O"),
             [$"user_{uid}_vaultTimeoutSettings_vaultTimeout"] = 15,
         };
+        if (DefaultUriMatch is { } match) root[$"user_{uid}_domainSettings_defaultUriMatchStrategy"] = match;
+        if (EquivalentDomains is { } groups)
+            root[$"user_{uid}_domainSettings_equivalentDomains"] = new JsonArray(groups.Select(g => (JsonNode)new JsonArray(g.Select(d => (JsonNode)d).ToArray())).ToArray());
         if (_orgKeys.Count > 0)
         {
             var isV2 = _userKey.KeyId != null;

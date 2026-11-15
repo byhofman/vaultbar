@@ -130,6 +130,12 @@ public static class DesktopStore
                 JsonValue v => v.ToJsonString(),
                 _ => null,
             },
+            UriMatch = new UriMatchSettings(
+                Int(U("domainSettings_defaultUriMatchStrategy")) is { } m && Enum.IsDefined((UriMatch)m) ? (UriMatch)m : Vault.UriMatch.Domain,
+                (U("domainSettings_equivalentDomains") as JsonArray ?? [])
+                    .OfType<JsonArray>()
+                    .Select(g => (IReadOnlyList<string>)g.Select(Str).OfType<string>().ToList())
+                    .ToList()),
             ContentHash = Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(
                 System.Text.Encoding.UTF8.GetBytes(ciphers.ToJsonString() + folders.ToJsonString() + string.Join(",", orgKeys.Values)))),
         };

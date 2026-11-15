@@ -80,12 +80,21 @@ public static partial class Matcher
         return Math.Max(5, 30 - gaps * 4 - first * 0.5);
     }
 
-    public static List<VaultItem> Suggest(IReadOnlyList<VaultItem> items, ForeignWindow? context, UsageStore usage, int limit = 4)
+    /// <summary>
+    /// Items for the window the bar opened over. In a browser only the page address counts, matched with Bitwarden's URI
+    /// rules: the title is the page's own text, so a look-alike page titled "Contoso: sign in" would otherwise get the real
+    /// Contoso login offered first. Other apps are matched on their title and name.
+    /// </summary>
+    public static List<VaultItem> Suggest(IReadOnlyList<VaultItem> items, ForeignWindow? context, UriMatchSettings settings, UsageStore usage, int limit = 4)
     {
         if (context is null) return [];
-        var title = BrowserSuffix().Replace(context.Title, "");
-        var app = Browsers.Contains(context.App.ToLowerInvariant()) ? "" : context.App;
-        var text = $"{title} {app}".ToLowerInvariant();
+        if (context.IsBrowser)
+        {
+            if (context.Address is not { } address) return [];
+            return Rank(items.Where(i => i.MatchesPage(address, settings)).Select(i => (i, 10.0)), usage, limit);
+        }
+
+        var text = $"{context.Title} {context.App}".ToLowerInvariant();
         var tokens = WordSplit().Split(text).Where(t => t.Length >= 3 && !StopWords.Contains(t)).ToHashSet();
         if (tokens.Count == 0) return [];
 
@@ -103,11 +112,22 @@ public static partial class Matcher
                 var nameTokens = WordSplit().Split(item.NameLower).Where(t => t.Length >= 3 && !StopWords.Contains(t)).ToList();
                 if (nameTokens.Count > 0 && nameTokens.All(tokens.Contains)) score = 6;
             }
-            if (score > 0) results.Add((item, score + usage.Boost(item.Id) + (item.Favorite ? 1 : 0)));
+            if (score > 0) results.Add((item, score));
         }
 
-        return results.OrderByDescending(r => r.Score).Take(limit).Select(r => r.Item).ToList();
+        return Rank(results, usage, limit);
     }
+
+    /// <summary>
+    /// Whether filling this item needs a second Enter: the window is a browser and its address is unknown or is not one of
+    /// the item's websites by Bitwarden's rules.
+    /// </summary>
+    public static bool FillNeedsConfirmation(VaultItem item, ForeignWindow? target, UriMatchSettings settings) =>
+        target is { IsBrowser: true } && (target.Address is not { } address || !item.MatchesPage(address, settings));
+
+    private static List<VaultItem> Rank(IEnumerable<(VaultItem Item, double Score)> scored, UsageStore usage, int limit) =>
+        scored.Select(r => (r.Item, Score: r.Score + usage.Boost(r.Item.Id) + (r.Item.Favorite ? 1 : 0)))
+            .OrderByDescending(r => r.Score).Take(limit).Select(r => r.Item).ToList();
 
     internal static string MainLabel(string host)
     {
@@ -119,15 +139,6 @@ public static partial class Matcher
         return labels[i];
     }
 
-    private static readonly HashSet<string> Browsers = new(StringComparer.Ordinal)
-    {
-        "chrome", "msedge", "firefox", "brave", "vivaldi", "opera", "chromium", "safari", "arc", "zen", "librewolf",
-        "google-chrome", "microsoft-edge", "navigator", "firefox-esr", "google chrome", "microsoft edge",
-    };
-
     [GeneratedRegex("[^a-z0-9]+")]
     private static partial Regex WordSplit();
-
-    [GeneratedRegex(@"\s[-—–]\s(?:Google Chrome|Mozilla Firefox|Firefox|Brave|Vivaldi|Opera|Chromium|Safari|Arc|Zen Browser|LibreWolf|(?:[^-—–]{1,40}\s[-—–]\s)?Microsoft\W{0,2}Edge)\s*$", RegexOptions.IgnoreCase)]
-    private static partial Regex BrowserSuffix();
 }

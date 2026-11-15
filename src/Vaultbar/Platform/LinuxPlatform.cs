@@ -119,7 +119,7 @@ internal sealed class LinuxPlatform : IPlatform
             var title = X11.StringProperty(d, active, "_NET_WM_NAME", "UTF8_STRING") ?? X11.StringProperty(d, active, "WM_NAME", null) ?? "";
             var wmClass = X11.StringProperty(d, active, "WM_CLASS", null)?.Split('\0', StringSplitOptions.RemoveEmptyEntries);
             var app = wmClass is { Length: > 1 } ? wmClass[1] : wmClass?.FirstOrDefault() ?? "";
-            return new ForeignWindow((nint)active, title, app);
+            return new ForeignWindow((nint)active, title, app) { IsBrowser = Browsers.IsBrowserApp(app) || wmClass?.Any(Browsers.IsBrowserApp) == true };
         }
     }
 
