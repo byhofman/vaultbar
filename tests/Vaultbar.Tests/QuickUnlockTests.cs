@@ -146,7 +146,7 @@ public class QuickUnlockTests : IDisposable
     {
         var (vault, device) = await Enrolled();
         vault.Lock();
-        Assert.Null(new QuickUnlockStore(StorePath).Load(VaultFixture.UserId, DateTimeOffset.MinValue)?.WrappedKey);
+        Assert.Null(new QuickUnlockStore(StorePath).Load(VaultFixture.UserId, DateTimeOffset.MinValue, DateTimeOffset.MaxValue)?.WrappedKey);
         vault.Dispose();
 
         using var restarted = Restarted(device);
@@ -179,7 +179,7 @@ public class QuickUnlockTests : IDisposable
         using var expired = Restarted(device, acrossRestarts: true);
         Assert.False(expired.CanQuickUnlock);
         Assert.Equal(QuickUnlockStatus.Unavailable, (await expired.QuickUnlockAsync()).Status);
-        Assert.Null(new QuickUnlockStore(StorePath).Load(VaultFixture.UserId, DateTimeOffset.MinValue)?.WrappedKey);
+        Assert.Null(new QuickUnlockStore(StorePath).Load(VaultFixture.UserId, DateTimeOffset.MinValue, DateTimeOffset.MaxValue)?.WrappedKey);
 
         // A master-password unlock starts the age again; the next quick unlock stores the key, with no extra prompt.
         Assert.Null(await expired.UnlockAsync("correct horse"));
@@ -198,7 +198,7 @@ public class QuickUnlockTests : IDisposable
 
         using var restarted = Restarted(device, acrossRestarts: false);
         Assert.False(restarted.CanQuickUnlock);
-        Assert.Null(new QuickUnlockStore(StorePath).Load(VaultFixture.UserId, DateTimeOffset.MinValue)?.WrappedKey);
+        Assert.Null(new QuickUnlockStore(StorePath).Load(VaultFixture.UserId, DateTimeOffset.MinValue, DateTimeOffset.MaxValue)?.WrappedKey);
     }
 
     [Fact]
@@ -235,8 +235,60 @@ public class QuickUnlockTests : IDisposable
         }.ToJsonString());
 
         using var vault = Restarted(new FakeDevice());
-        Assert.Equal(QuickUnlockStatus.Unavailable, (await vault.QuickUnlockAsync()).Status);
+        Assert.False(vault.CanQuickUnlock);
         Assert.False(File.Exists(StorePath));
         Assert.Equal(QuickUnlockSetting.NotSetUp, vault.QuickUnlockSetting);
+    }
+
+    [Fact]
+    public async Task SigningOutOfTheLastAccount_ForgetsQuickUnlock()
+    {
+        var (vault, device) = await Enrolled(acrossRestarts: true);
+        vault.Lock();
+
+        var root = JsonNode.Parse(File.ReadAllText(DataPath))!.AsObject();
+        root["global_account_activeAccountId"] = null;
+        root["global_account_accounts"] = new JsonObject();
+        File.WriteAllText(DataPath, root.ToJsonString());
+        vault.Probe();
+        Assert.False(File.Exists(StorePath));
+
+        // Signing back in to the same account does not bring it back.
+        VaultFixture.Demo().Write(DataPath, "correct horse");
+        vault.Probe();
+        Assert.False(vault.CanQuickUnlock);
+        Assert.Equal(QuickUnlockStatus.Unavailable, (await vault.QuickUnlockAsync()).Status);
+        Assert.Equal(1, device.Prompts);
+    }
+
+    [Fact]
+    public async Task DeletingDataJson_ForgetsQuickUnlock()
+    {
+        var (vault, _) = await Enrolled(acrossRestarts: true);
+        vault.Lock();
+        File.Delete(DataPath);
+        vault.Probe();
+        Assert.False(File.Exists(StorePath));
+        Assert.False(vault.CanQuickUnlock);
+    }
+
+    [Fact]
+    public async Task ThisProcessesKey_AlsoEndsAtTheMaximumAge()
+    {
+        var (vault, _) = await Enrolled();
+        vault.Lock();
+        _clock.Now += TimeSpan.FromDays(15);
+        Assert.False(vault.CanQuickUnlock);
+        Assert.Equal(QuickUnlockStatus.Unavailable, (await vault.QuickUnlockAsync()).Status);
+    }
+
+    [Fact]
+    public async Task AStoredKeyDatedInTheFuture_IsNotUsed()
+    {
+        var (vault, device) = await Enrolled(acrossRestarts: true);
+        vault.Dispose();
+        _clock.Now -= TimeSpan.FromDays(3);
+        using var restarted = Restarted(device, acrossRestarts: true);
+        Assert.False(restarted.CanQuickUnlock);
     }
 }

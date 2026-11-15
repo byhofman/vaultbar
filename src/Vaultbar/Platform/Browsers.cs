@@ -22,6 +22,9 @@ public static class Browsers
         "org.torproject.torbrowser", "net.mullvad.mullvadbrowser", "one.ablaze.floorp", "com.naver.Whale",
     ];
 
+    public static bool IsWebAddress(string? address) =>
+        Uri.TryCreate(address, UriKind.Absolute, out var u) && u.Scheme is "http" or "https";
+
     public static bool IsBrowserApp(string processOrClass) => Names.Contains(processOrClass.Trim());
 
     public static bool IsBrowserBundle(string? bundleId) =>

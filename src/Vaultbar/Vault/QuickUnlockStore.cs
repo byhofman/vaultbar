@@ -19,12 +19,16 @@ public sealed class QuickUnlockStore(string path)
         var root = Read();
         if (root is null || DesktopStore.Str(root["userId"]) != userId) return QuickUnlockSetting.NotSetUp;
         if (root["declined"] is JsonValue v && v.TryGetValue<bool>(out var declined) && declined) return QuickUnlockSetting.Off;
-        return DesktopStore.Str(root["verifier"]) is null ? QuickUnlockSetting.NotSetUp : QuickUnlockSetting.On;
+        if (DesktopStore.Str(root["verifier"]) is not null) return QuickUnlockSetting.On;
+        // An enrollment from before VBR-25 keeps the key with no age: it goes the first time anything looks at it.
+        if (root["key"] != null) Delete();
+        return QuickUnlockSetting.NotSetUp;
     }
 
     /// <summary>The enrollment for this account. A stored key is dropped here once persistence is off or it is too old.</summary>
     /// <param name="keepKeyUntil">The oldest master-password unlock a stored key may date from, or null when persistence is off.</param>
-    public QuickUnlockEntry? Load(string userId, DateTimeOffset? keepKeyUntil)
+    /// <param name="latest">The latest one it may date from: a time in the future means a turned-back clock or an edited file.</param>
+    public QuickUnlockEntry? Load(string userId, DateTimeOffset? keepKeyUntil, DateTimeOffset latest)
     {
         var root = Read();
         if (root is null || DesktopStore.Str(root["userId"]) != userId) return null;
@@ -39,7 +43,7 @@ public sealed class QuickUnlockStore(string path)
         var entry = new QuickUnlockEntry(userId, Convert.FromBase64String(challenge), Convert.FromBase64String(verifier));
         if (DesktopStore.Str(root["key"]) is { } key && DateTimeOffset.TryParse(DesktopStore.Str(root["passwordAt"]), out var at))
         {
-            if (keepKeyUntil is { } oldest && at >= oldest) return entry with { WrappedKey = Convert.FromBase64String(key), PasswordAt = at };
+            if (keepKeyUntil is { } oldest && at >= oldest && at <= latest) return entry with { WrappedKey = Convert.FromBase64String(key), PasswordAt = at };
             Save(entry);
         }
         else if (root["key"] != null)
@@ -101,12 +105,13 @@ public sealed class QuickUnlockStore(string path)
     public static bool Verifies(QuickUnlockEntry entry, byte[] signature, ReadOnlySpan<byte> userKey) =>
         CryptographicOperations.FixedTimeEquals(Verifier(signature, entry.Challenge, entry.UserId, userKey), entry.Verifier);
 
-    public static byte[] Wrap(ReadOnlySpan<byte> userKey, byte[] signature, byte[] challenge, string userId)
+    /// <summary>Encrypts the user key for the disk, with the master-password time it dates from bound in as associated data.</summary>
+    public static byte[] Wrap(ReadOnlySpan<byte> userKey, byte[] signature, byte[] challenge, string userId, DateTimeOffset passwordAt)
     {
         var key = DeriveKey(signature, challenge);
         try
         {
-            return Seal(userKey, key, userId);
+            return Seal(userKey, key, StoredKeyContext(userId, passwordAt));
         }
         finally
         {
@@ -117,11 +122,11 @@ public sealed class QuickUnlockStore(string path)
     /// <exception cref="CryptographicException">The signature does not belong to this entry.</exception>
     public static byte[] Unwrap(QuickUnlockEntry entry, byte[] signature)
     {
-        if (entry.WrappedKey is not { } data) throw new CryptographicException("No stored key.");
+        if (entry is not { WrappedKey: { } data, PasswordAt: { } at }) throw new CryptographicException("No stored key.");
         var key = DeriveKey(signature, entry.Challenge);
         try
         {
-            return Open(data, key, entry.UserId);
+            return Open(data, key, StoredKeyContext(entry.UserId, at));
         }
         finally
         {
@@ -129,22 +134,24 @@ public sealed class QuickUnlockStore(string path)
         }
     }
 
-    internal static byte[] Seal(ReadOnlySpan<byte> plain, byte[] key, string userId)
+    private static string StoredKeyContext(string userId, DateTimeOffset passwordAt) => $"{userId}|{passwordAt.UtcTicks}";
+
+    internal static byte[] Seal(ReadOnlySpan<byte> plain, byte[] key, string context)
     {
         var output = new byte[12 + plain.Length + 16];
         RandomNumberGenerator.Fill(output.AsSpan(0, 12));
         using var aes = new AesGcm(key, 16);
-        aes.Encrypt(output.AsSpan(0, 12), plain, output.AsSpan(12, plain.Length), output.AsSpan(12 + plain.Length), Encoding.UTF8.GetBytes(userId));
+        aes.Encrypt(output.AsSpan(0, 12), plain, output.AsSpan(12, plain.Length), output.AsSpan(12 + plain.Length), Encoding.UTF8.GetBytes(context));
         return output;
     }
 
     /// <exception cref="CryptographicException">Wrong key or damaged data.</exception>
-    internal static byte[] Open(byte[] data, byte[] key, string userId)
+    internal static byte[] Open(byte[] data, byte[] key, string context)
     {
         if (data.Length < 12 + 16 + 32) throw new CryptographicException("Stored key is too short.");
         var plain = new byte[data.Length - 12 - 16];
         using var aes = new AesGcm(key, 16);
-        aes.Decrypt(data.AsSpan(0, 12), data.AsSpan(12, plain.Length), data.AsSpan(12 + plain.Length), plain, Encoding.UTF8.GetBytes(userId));
+        aes.Decrypt(data.AsSpan(0, 12), data.AsSpan(12, plain.Length), data.AsSpan(12 + plain.Length), plain, Encoding.UTF8.GetBytes(context));
         return plain;
     }
 
