@@ -74,8 +74,9 @@ public sealed class BrowserAddressTests : IDisposable
                 if (address != expected) await Task.Delay(500);
             }
             Assert.Equal(expected, address);
-            // An unlisted browser or web view is recognised the same way.
-            Assert.Equal(expected, WindowsBrowserAddress.Read(window, knownBrowser: false));
+            // An unlisted Chromium browser or web view (WebView2, Electron) is recognised the same way. Firefox reaches UI
+            // Automation through its MSAA bridge, which does not name the framework, so it is known by name only.
+            if (browser != "firefox") Assert.Equal(expected, WindowsBrowserAddress.Read(window, knownBrowser: false));
         }
         finally
         {
@@ -163,13 +164,17 @@ public sealed class BrowserAddressTests : IDisposable
         {
             string? address = null;
             var pid = 0;
-            for (var i = 0; i < 40 && address != expected; i++)
+            for (var i = 0; i < 8 && address != expected; i++)
             {
                 await Task.Delay(500);
                 pid = Process.GetProcessesByName(process).Where(p => p.StartTime >= started).OrderBy(p => p.StartTime).Select(p => p.Id).FirstOrDefault();
-                if (pid != 0) address = MacBrowserAddress.Read(pid);
+                // The hosted runner answers each accessibility call slowly, so this gives the read more time than the
+                // bar would; what is tested is which address is read, not how fast.
+                if (pid != 0) address = MacBrowserAddress.Read(pid, knownBrowser: true, TimeSpan.FromSeconds(15));
             }
-            Assert.True(expected == address, $"read {address ?? "nothing"}; {(pid == 0 ? "no process" : MacBrowserAddress.Describe(pid))}; processes: {string.Join(", ", Process.GetProcesses().Where(p => p.ProcessName.Contains(process, StringComparison.OrdinalIgnoreCase)).Select(p => $"{p.ProcessName} {p.Id}"))}; windows: {Run("/bin/sh", "-c", $"osascript -e 'tell application \"System Events\" to get name of every window of (every process whose unix id is {pid})' 2>&1; ps -o stat=,etime= -p {pid}")}");
+            var described = pid == 0 ? "no process" : MacBrowserAddress.Describe(pid);
+            var afterDescribe = pid == 0 ? null : MacBrowserAddress.Read(pid, knownBrowser: true, TimeSpan.FromSeconds(15));
+            Assert.True(expected == address, $"read {address ?? "nothing"} ({MacBrowserAddress.LastAttempt}); read after describing: {afterDescribe ?? "nothing"}; {described}; processes: {string.Join(", ", Process.GetProcesses().Where(p => p.ProcessName.Contains(process, StringComparison.OrdinalIgnoreCase)).Select(p => $"{p.ProcessName} {p.Id}"))}; windows: {Run("/bin/sh", "-c", $"osascript -e 'tell application \"System Events\" to get name of every window of (every process whose unix id is {pid})' 2>&1; ps -o stat=,etime= -p {pid}")}");
         }
         finally
         {
@@ -189,8 +194,15 @@ public sealed class BrowserAddressTests : IDisposable
     private static string Run(string file, params string[] args)
     {
         using var p = Process.Start(new ProcessStartInfo(file, args) { RedirectStandardOutput = true, RedirectStandardError = true })!;
-        p.WaitForExit(15000);
-        return (p.StandardOutput.ReadToEnd() + p.StandardError.ReadToEnd()).Trim();
+        var output = p.StandardOutput.ReadToEndAsync();
+        var errors = p.StandardError.ReadToEndAsync();
+        // A diagnostic must never hang the run: osascript can wait on a permission prompt nobody answers.
+        if (!p.WaitForExit(15000))
+        {
+            p.Kill(entireProcessTree: true);
+            return "(timed out)";
+        }
+        return (output.Result + errors.Result).Trim();
     }
 
     [System.Runtime.InteropServices.DllImport("/System/Library/Frameworks/ApplicationServices.framework/ApplicationServices", EntryPoint = "AXIsProcessTrusted")]
