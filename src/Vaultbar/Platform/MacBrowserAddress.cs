@@ -31,9 +31,12 @@ internal static unsafe class MacBrowserAddress
     private static readonly HashSet<int> AskedForWebTree = [];
 
     /// <param name="knownBrowser">False for any other app: one quick look, to catch browsers and web views not on the list.</param>
-    public static string? Read(int pid, bool knownBrowser = true) => WithApp(pid, knownBrowser, app =>
+    public static string? Read(int pid, bool knownBrowser = true) => Read(pid, knownBrowser, knownBrowser ? Budget : ProbeBudget);
+
+    /// <param name="budget">Only a test passes its own, on a runner where each call into a browser is slow.</param>
+    internal static string? Read(int pid, bool knownBrowser, TimeSpan budget) => WithApp(pid, knownBrowser, app =>
     {
-        var deadline = DateTime.UtcNow + (knownBrowser ? Budget : ProbeBudget);
+        var deadline = DateTime.UtcNow + budget;
         while (DateTime.UtcNow < deadline)
         {
             if (FocusedPage(app) is { Length: > 0 } focused) return focused;
