@@ -8,4 +8,7 @@ public sealed record ForeignWindow(nint Handle, string Title, string App, int Pi
 
     /// <summary>The address of the page a browser shows, from its accessibility tree; null when it could not be read.</summary>
     public string? Address { get; init; }
+
+    /// <summary>On the list of browsers, as opposed to an app found to show a web page.</summary>
+    public bool KnownBrowser { get; init; }
 }

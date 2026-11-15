@@ -44,8 +44,17 @@ public sealed class VaultService : IDisposable
     }
 
     /// <summary>The oldest master-password unlock a stored quick-unlock key may date from; null when none may be stored.</summary>
-    private DateTimeOffset? KeepKeyUntil =>
-        _config.QuickUnlockAcrossRestarts ? _clock.GetUtcNow() - TimeSpan.FromDays(Math.Max(1, _config.QuickUnlockMaxAgeDays)) : null;
+    private DateTimeOffset? KeepKeyUntil => _config.QuickUnlockAcrossRestarts ? PasswordNeededBefore : null;
+
+    /// <summary>
+    /// A master-password unlock older than this no longer backs a quick unlock, in this process either: Vaultbar runs for
+    /// weeks, and the password should be asked for now and then all the same.
+    /// </summary>
+    private DateTimeOffset PasswordNeededBefore => _clock.GetUtcNow() - TimeSpan.FromDays(Math.Clamp(_config.QuickUnlockMaxAgeDays, 1, 365));
+
+    private DateTimeOffset Latest => _clock.GetUtcNow() + TimeSpan.FromDays(1);
+
+    private bool SessionFor(string userId) => _session?.UserId == userId && _passwordAt is { } at && at >= PasswordNeededBefore;
 
     public IQuickUnlockProvider? QuickUnlock { get; set; }
 
@@ -76,6 +85,7 @@ public sealed class VaultService : IDisposable
         StorePath = DesktopStore.Locate(_config.DataPath);
         if (StorePath is null)
         {
+            ForgetQuickUnlockOfGoneAccounts([]);
             State = VaultState.NotFound;
             Error = null;
             return;
@@ -84,13 +94,15 @@ public sealed class VaultService : IDisposable
         try
         {
             var snapshot = DesktopStore.Read(StorePath);
-            ForgetQuickUnlockOfGoneAccounts(snapshot);
+            ForgetQuickUnlockOfGoneAccounts(snapshot.AccountIds);
             ApplyMetadata(snapshot);
             State = VaultState.Locked;
             Error = null;
         }
         catch (Exception ex)
         {
+            // Signed out of the desktop app: the account's quick unlock goes too.
+            if (ex is StoreException { Error: VaultError.NoAccount }) ForgetQuickUnlockOfGoneAccounts(DesktopStore.AccountIds(StorePath));
             State = VaultState.Error;
             Error = ErrorOf(ex);
             Log.Write($"probe: {Log.Shape(ex)}");
@@ -131,7 +143,7 @@ public sealed class VaultService : IDisposable
     /// <summary>Quick unlock is set up and something can open the vault with it: this process's key, or one kept on disk.</summary>
     public bool CanQuickUnlock =>
         QuickUnlockSetting == QuickUnlockSetting.On && _snapshot is { } snapshot
-        && (_session?.UserId == snapshot.UserId || _quickStore.Load(snapshot.UserId, KeepKeyUntil)?.WrappedKey != null);
+        && (SessionFor(snapshot.UserId) || _quickStore.Load(snapshot.UserId, KeepKeyUntil, Latest)?.WrappedKey != null);
 
     public async Task<bool> ShouldOfferQuickUnlockAsync() =>
         State == VaultState.Unlocked && QuickUnlockSetting == QuickUnlockSetting.NotSetUp && await QuickUnlock!.IsAvailableAsync();
@@ -143,9 +155,11 @@ public sealed class VaultService : IDisposable
         try
         {
             var snapshot = await Task.Run(() => DesktopStore.Read(StorePath));
-            ForgetQuickUnlockOfGoneAccounts(snapshot);
-            if (_quickStore.Load(snapshot.UserId, KeepKeyUntil) is not { } entry) return (QuickUnlockStatus.Unavailable, null);
-            var session = _session?.UserId == snapshot.UserId ? _session : null;
+            ForgetQuickUnlockOfGoneAccounts(snapshot.AccountIds);
+            if (_quickStore.Load(snapshot.UserId, KeepKeyUntil, Latest) is not { } entry) return (QuickUnlockStatus.Unavailable, null);
+            // A copy, taken under the lock: a lock or sign-out during the prompt may zero the session itself.
+            Session? session;
+            lock (_gate) session = SessionFor(snapshot.UserId) ? new Session(_session!.UserId, _session.Key.ToArray(), _session.Sealed) : null;
             if (session is null && entry.WrappedKey is null) return (QuickUnlockStatus.Unavailable, null);
 
             var (status, signature) = await provider.SignAsync(entry.UserId, entry.Challenge, createKey: false);
@@ -164,7 +178,7 @@ public sealed class VaultService : IDisposable
                 CheckUserKey(snapshot, userKey);
                 if (session is null) _passwordAt = entry.PasswordAt;
                 else if (KeepKeyUntil is { } oldest && _passwordAt is { } at && at >= oldest && entry.PasswordAt != at)
-                    _quickStore.Save(entry with { WrappedKey = QuickUnlockStore.Wrap(userKey, signature, entry.Challenge, entry.UserId), PasswordAt = at });
+                    _quickStore.Save(entry with { WrappedKey = QuickUnlockStore.Wrap(userKey, signature, entry.Challenge, entry.UserId, at), PasswordAt = at });
             }
             catch (CryptographicException ex)
             {
@@ -175,6 +189,7 @@ public sealed class VaultService : IDisposable
             finally
             {
                 CryptographicOperations.ZeroMemory(signature);
+                if (session != null) CryptographicOperations.ZeroMemory(session.Key);
             }
 
             Open(snapshot, userKey, passwordAt: null);
@@ -215,7 +230,7 @@ public sealed class VaultService : IDisposable
             {
                 var entry = new QuickUnlockEntry(snapshot.UserId, challenge, QuickUnlockStore.Verifier(signature, challenge, snapshot.UserId, userKey));
                 if (KeepKeyUntil is { } oldest && _passwordAt is { } at && at >= oldest)
-                    entry = entry with { WrappedKey = QuickUnlockStore.Wrap(userKey, signature, challenge, snapshot.UserId), PasswordAt = at };
+                    entry = entry with { WrappedKey = QuickUnlockStore.Wrap(userKey, signature, challenge, snapshot.UserId, at), PasswordAt = at };
                 _quickStore.Save(entry);
             }
             finally
@@ -240,7 +255,7 @@ public sealed class VaultService : IDisposable
     {
         var provider = QuickUnlock;
         var snapshot = _snapshot;
-        if (provider is null || snapshot is null || State != VaultState.Unlocked || _quickStore.Load(snapshot.UserId, KeepKeyUntil) is not { } entry)
+        if (provider is null || snapshot is null || State != VaultState.Unlocked || _quickStore.Load(snapshot.UserId, KeepKeyUntil, Latest) is not { } entry)
             return QuickUnlockStatus.Unavailable;
         var (status, signature) = await provider.SignAsync(entry.UserId, entry.Challenge, createKey: false);
         if (status != QuickUnlockStatus.Success || signature is null) return status;
@@ -362,7 +377,7 @@ public sealed class VaultService : IDisposable
             if (keepForQuickUnlock && _userKey is { } userKey && _snapshot is { } snapshot && QuickUnlock != null
                 && _quickStore.SettingFor(snapshot.UserId) == QuickUnlockSetting.On)
             {
-                var sealing = RandomNumberGenerator.GetBytes(32);
+                var sealing = LockedMemory.Adopt(RandomNumberGenerator.GetBytes(32));
                 var bytes = userKey.ToBytes();
                 try
                 {
@@ -400,11 +415,13 @@ public sealed class VaultService : IDisposable
     }
 
     /// <summary>An account that left the desktop app (signed out or removed) takes its quick unlock with it.</summary>
-    private void ForgetQuickUnlockOfGoneAccounts(StoreSnapshot snapshot)
+    /// <param name="accountIds">The accounts in data.json; null when they could not be read, which forgets nothing.</param>
+    private void ForgetQuickUnlockOfGoneAccounts(IReadOnlyCollection<string>? accountIds)
     {
-        _quickStore.ForgetUnlessIn(snapshot.AccountIds);
+        if (accountIds is null) return;
+        _quickStore.ForgetUnlessIn(accountIds);
         lock (_gate)
-            if (_session is { } session && !snapshot.AccountIds.Contains(session.UserId)) DropSession();
+            if (_session is { } session && !accountIds.Contains(session.UserId)) DropSession();
     }
 
     private static byte[] UnwrapUserKey(string wrapped, byte[] masterKey)
@@ -569,7 +586,7 @@ public sealed class VaultService : IDisposable
         try
         {
             var snapshot = DesktopStore.Read(path);
-            ForgetQuickUnlockOfGoneAccounts(snapshot);
+            ForgetQuickUnlockOfGoneAccounts(snapshot.AccountIds);
             if (snapshot.UserId != _snapshot?.UserId)
             {
                 // The desktop app switched accounts: this key belongs to the other one.
@@ -589,6 +606,12 @@ public sealed class VaultService : IDisposable
             }
             ApplyMetadata(snapshot);
             Changed?.Invoke();
+        }
+        catch (StoreException ex) when (ex.Error == VaultError.NoAccount)
+        {
+            // Signed out of the desktop app while unlocked: lock, and the account's quick unlock goes with it.
+            ForgetQuickUnlockOfGoneAccounts(DesktopStore.AccountIds(path));
+            Lock(keepForQuickUnlock: false);
         }
         catch (Exception ex)
         {

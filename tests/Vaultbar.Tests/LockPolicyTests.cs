@@ -10,13 +10,13 @@ public class LockPolicyTests
     [InlineData("15", 15, false, false, false)]
     [InlineData("1", 1, false, false, false)]
     [InlineData("480", 480, false, false, false)]
-    [InlineData("0", null, true, false, false)]
+    [InlineData("0", 15, true, false, false)]
     [InlineData("onIdle", null, false, true, false)]
     [InlineData("-4", null, false, true, false)]
-    [InlineData("onSleep", null, false, false, true)]
-    [InlineData("-3", null, false, false, true)]
-    [InlineData("onLocked", null, false, false, true)]
-    [InlineData("-2", null, false, false, true)]
+    [InlineData("onSleep", 15, false, false, true)]
+    [InlineData("-3", 15, false, false, true)]
+    [InlineData("onLocked", 15, false, false, true)]
+    [InlineData("-2", 15, false, false, true)]
     [InlineData("onRestart", 15, false, false, false)]
     [InlineData("-1", 15, false, false, false)]
     [InlineData("never", 15, false, false, false)]
@@ -67,9 +67,33 @@ public class LockPolicyTests
     }
 
     [Fact]
-    public void OnLockedAndImmediately_HaveNoIdleLock()
+    public void OnLockedAndImmediately_KeepTheIdleFallbackAsABackstop()
     {
-        Assert.False(LockPolicy.From(null, "onLocked").IdleExpired(TimeSpan.FromDays(3), TimeSpan.FromDays(3)));
-        Assert.False(LockPolicy.From(null, "0").IdleExpired(TimeSpan.FromDays(3), TimeSpan.FromDays(3)));
+        Assert.False(LockPolicy.From(null, "onLocked").IdleExpired(TimeSpan.FromMinutes(14), TimeSpan.FromMinutes(14)));
+        Assert.True(LockPolicy.From(null, "onLocked").IdleExpired(TimeSpan.FromMinutes(15), TimeSpan.Zero));
+        Assert.True(LockPolicy.From(null, "0").IdleExpired(TimeSpan.FromMinutes(15), TimeSpan.Zero));
+    }
+
+    [Theory]
+    [InlineData("\"onIdle\"", "onIdle")]
+    [InlineData("-2", "-2")]
+    [InlineData("0", "0")]
+    [InlineData("null", null)]
+    public async Task TheDesktopAppsStoredValue_IsReadAsItIs(string json, string? expected)
+    {
+        var dir = Path.Combine(Path.GetTempPath(), "vaultbar-tests-" + Guid.NewGuid().ToString("N"));
+        try
+        {
+            var path = Path.Combine(dir, "data.json");
+            new VaultFixture { VaultTimeoutJson = json }.Write(path, "correct horse");
+            using var vault = new VaultService(new Config { DataPath = path });
+            vault.Probe();
+            Assert.Null(await vault.UnlockAsync("correct horse"));
+            Assert.Equal(LockPolicy.From(null, expected), vault.LockPolicy);
+        }
+        finally
+        {
+            if (Directory.Exists(dir)) Directory.Delete(dir, true);
+        }
     }
 }

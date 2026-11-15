@@ -198,6 +198,9 @@ public sealed class VaultFixture
     /// <summary>Bitwarden's "default URI match detection" setting; null leaves it out, as an account that never changed it.</summary>
     public int? DefaultUriMatch { get; set; }
 
+    /// <summary>The stored vault timeout as raw JSON: a number, a string such as "onIdle", or null.</summary>
+    public string VaultTimeoutJson { get; set; } = "15";
+
     public string[][]? EquivalentDomains { get; set; }
 
     public void Write(string path, string password, int iterations = 5000)
@@ -220,7 +223,7 @@ public sealed class VaultFixture
             [$"user_{uid}_ciphers_ciphers"] = _ciphers.DeepClone(),
             [$"user_{uid}_folder_folders"] = _folders.DeepClone(),
             [$"user_{uid}_sync_lastSync"] = DateTimeOffset.UtcNow.AddMinutes(-3).ToString("O"),
-            [$"user_{uid}_vaultTimeoutSettings_vaultTimeout"] = 15,
+            [$"user_{uid}_vaultTimeoutSettings_vaultTimeout"] = JsonNode.Parse(VaultTimeoutJson),
         };
         if (DefaultUriMatch is { } match) root[$"user_{uid}_domainSettings_defaultUriMatchStrategy"] = match;
         if (EquivalentDomains is { } groups)
