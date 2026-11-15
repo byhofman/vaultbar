@@ -146,16 +146,17 @@ public sealed class AppController
     /// </summary>
     public void OnBarHidden()
     {
-        if (!Vault.LockPolicy.OnBarHidden || Vault.State != VaultState.Unlocked) return;
         _lockingOnHide = true;
+        bool locked;
         try
         {
-            Vault.Lock();
+            locked = Vault.LockBecauseTheBarClosed();
         }
         finally
         {
             _lockingOnHide = false;
         }
+        if (!locked) return;
         _ = Clipboard.ClearUnlessTimedAsync();
         _window?.OnVaultChanged();
     }

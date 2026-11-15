@@ -19,13 +19,28 @@ public sealed class QuickUnlockStore(string path)
         var root = Read();
         if (root is null || DesktopStore.Str(root["userId"]) != userId) return QuickUnlockSetting.NotSetUp;
         if (root["declined"] is JsonValue v && v.TryGetValue<bool>(out var declined) && declined) return QuickUnlockSetting.Off;
-        if (DesktopStore.Str(root["verifier"]) is not null) return QuickUnlockSetting.On;
-        // An enrollment from before VBR-25 keeps the key with no age: it goes the first time anything looks at it.
-        if (root["key"] != null) Delete();
-        return QuickUnlockSetting.NotSetUp;
+        // An enrollment from before VBR-25 has no verifier: it counts as not set up, and Tidy removes it.
+        return DesktopStore.Str(root["verifier"]) is not null ? QuickUnlockSetting.On : QuickUnlockSetting.NotSetUp;
     }
 
-    /// <summary>The enrollment for this account. A stored key is dropped here once persistence is off or it is too old.</summary>
+    /// <summary>
+    /// The only place reading leads to writing: drops an enrollment from before VBR-25 (a key with no age), and a stored
+    /// key that persistence no longer allows, is too old, or is dated in the future. Called by explicit actions only (a
+    /// probe of data.json, an unlock), so the getters the UI reads stay free of side effects.
+    /// </summary>
+    public void Tidy(string userId, DateTimeOffset? keepKeyUntil, DateTimeOffset latest)
+    {
+        var root = Read();
+        if (root is null || DesktopStore.Str(root["userId"]) != userId || root["key"] is null) return;
+        if (DesktopStore.Str(root["verifier"]) is null || DesktopStore.Str(root["challenge"]) is null)
+        {
+            Delete();
+            return;
+        }
+        if (Load(userId, keepKeyUntil, latest) is { WrappedKey: null } entry) Save(entry);
+    }
+
+    /// <summary>The enrollment for this account, with its stored key only while that key may be used. Reads, never writes.</summary>
     /// <param name="keepKeyUntil">The oldest master-password unlock a stored key may date from, or null when persistence is off.</param>
     /// <param name="latest">The latest one it may date from: a time in the future means a turned-back clock or an edited file.</param>
     public QuickUnlockEntry? Load(string userId, DateTimeOffset? keepKeyUntil, DateTimeOffset latest)
@@ -33,22 +48,12 @@ public sealed class QuickUnlockStore(string path)
         var root = Read();
         if (root is null || DesktopStore.Str(root["userId"]) != userId) return null;
         if (DesktopStore.Str(root["challenge"]) is not { } challenge) return null;
-        if (DesktopStore.Str(root["verifier"]) is not { } verifier)
-        {
-            // An enrollment from before VBR-25 keeps the key with no age: it is not kept, and quick unlock is set up again.
-            Delete();
-            return null;
-        }
+        if (DesktopStore.Str(root["verifier"]) is not { } verifier) return null;
 
         var entry = new QuickUnlockEntry(userId, Convert.FromBase64String(challenge), Convert.FromBase64String(verifier));
         if (DesktopStore.Str(root["key"]) is { } key && DateTimeOffset.TryParse(DesktopStore.Str(root["passwordAt"]), out var at))
         {
             if (keepKeyUntil is { } oldest && at >= oldest && at <= latest) return entry with { WrappedKey = Convert.FromBase64String(key), PasswordAt = at };
-            Save(entry);
-        }
-        else if (root["key"] != null)
-        {
-            Save(entry);
         }
         return entry;
     }

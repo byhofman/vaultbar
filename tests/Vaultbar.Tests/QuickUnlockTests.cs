@@ -303,4 +303,25 @@ public class QuickUnlockTests : IDisposable
         Assert.False(File.Exists(StorePath));
         Assert.False(vault.CanQuickUnlock);
     }
+
+    [Fact]
+    public async Task TheGettersTheUiReads_NeverWriteOrDeleteTheFile()
+    {
+        var (vault, device) = await Enrolled(acrossRestarts: true);
+        vault.Dispose();
+        _clock.Now += TimeSpan.FromDays(30);
+        var before = File.ReadAllBytes(StorePath);
+
+        // A fresh service that has not probed yet: only the getters run.
+        var reader = new VaultService(new Config { DataPath = DataPath, QuickUnlockAcrossRestarts = false }, StorePath, _clock) { QuickUnlock = device };
+        _ = reader.QuickUnlockSetting;
+        _ = reader.CanQuickUnlock;
+        Assert.Equal(before, File.ReadAllBytes(StorePath));
+
+        // The explicit probe is what strips the key that is no longer allowed.
+        reader.Probe();
+        Assert.False(reader.CanQuickUnlock);
+        Assert.NotEqual(before, File.ReadAllBytes(StorePath));
+        Assert.Null(new QuickUnlockStore(StorePath).Load(VaultFixture.UserId, DateTimeOffset.MinValue, DateTimeOffset.MaxValue)?.WrappedKey);
+    }
 }

@@ -87,7 +87,8 @@ quick unlock never extends it, and the key is re-stored at the next quick unlock
 prompt appears. Turning the option off strips the key at the next read. An account missing from
 `global_account_accounts`, a sign-out of the last account, or a deleted `data.json` removes the enrollment and the
 in-memory key; an account switch drops the in-memory key. Enrollments from before this change carry no age, so they are
-deleted the first time Vaultbar looks at them, and Vaultbar offers to set quick unlock up again.
+deleted at the next probe of `data.json` or unlock, and Vaultbar offers to set quick unlock up again. Only those explicit
+actions write or delete the file; the settings the interface reads never do.
 
 ## D-15 Bitwarden's vault timeout, value by value — 2026-11-15
 
