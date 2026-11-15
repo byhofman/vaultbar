@@ -74,6 +74,8 @@ public sealed class BrowserAddressTests : IDisposable
                 if (address != expected) await Task.Delay(500);
             }
             Assert.Equal(expected, address);
+            // An unlisted browser or web view is recognised the same way.
+            Assert.Equal(expected, WindowsBrowserAddress.Read(window, knownBrowser: false));
         }
         finally
         {
@@ -88,6 +90,35 @@ public sealed class BrowserAddressTests : IDisposable
                 }
             }
             if (!launched.HasExited) launched.Kill(entireProcessTree: true);
+        }
+    }
+
+    [BrowserTheory(Os = "windows")]
+    [InlineData("notepad")]
+    public async Task Windows_ADocumentThatOnlyContainsAWebAddress_IsNotAPage(string editor)
+    {
+        var file = Path.Combine(_dir, "contoso-notes.txt");
+        File.WriteAllText(file, "https://login.contoso.com/");
+        var started = DateTime.Now.AddSeconds(-1);
+        using var launched = Process.Start(new ProcessStartInfo(editor, $"\"{file}\"") { UseShellExecute = true });
+        try
+        {
+            var window = await WindowWithTitleAsync("contoso-notes");
+            Assert.True(window != 0, $"no {editor} window");
+            Assert.Null(WindowsBrowserAddress.Read(window, knownBrowser: false));
+        }
+        finally
+        {
+            foreach (var p in Process.GetProcesses())
+            {
+                try
+                {
+                    if (p.StartTime >= started && p.MainWindowTitle.Contains("contoso-notes", StringComparison.Ordinal)) p.Kill(entireProcessTree: true);
+                }
+                catch (Exception ex) when (ex is InvalidOperationException or System.ComponentModel.Win32Exception)
+                {
+                }
+            }
         }
     }
 

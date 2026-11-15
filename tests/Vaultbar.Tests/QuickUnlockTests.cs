@@ -291,4 +291,16 @@ public class QuickUnlockTests : IDisposable
         using var restarted = Restarted(device, acrossRestarts: true);
         Assert.False(restarted.CanQuickUnlock);
     }
+
+    [Fact]
+    public async Task DeletingDataJsonWhileUnlocked_LocksAndForgets()
+    {
+        var (vault, _) = await Enrolled();
+        File.Delete(DataPath);
+        await Task.Delay(1000);
+        for (var i = 0; i < 60 && vault.State == VaultState.Unlocked; i++) await Task.Delay(100);
+        Assert.Equal(VaultState.Locked, vault.State);
+        Assert.False(File.Exists(StorePath));
+        Assert.False(vault.CanQuickUnlock);
+    }
 }
