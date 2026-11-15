@@ -576,6 +576,7 @@ public sealed class VaultService : IDisposable
         FileSystemEventHandler onChange = (_, _) => _reloadTimer?.Change(1500, Timeout.Infinite);
         _watcher.Changed += onChange;
         _watcher.Created += onChange;
+        _watcher.Deleted += onChange;
         _watcher.Renamed += (_, _) => _reloadTimer?.Change(1500, Timeout.Infinite);
         _reloadTimer = new Timer(_ => Reload(path), null, Timeout.Infinite, Timeout.Infinite);
         _watcher.EnableRaisingEvents = true;
@@ -607,9 +608,9 @@ public sealed class VaultService : IDisposable
             ApplyMetadata(snapshot);
             Changed?.Invoke();
         }
-        catch (StoreException ex) when (ex.Error == VaultError.NoAccount)
+        catch (Exception ex) when (ex is StoreException { Error: VaultError.NoAccount } or FileNotFoundException or DirectoryNotFoundException)
         {
-            // Signed out of the desktop app while unlocked: lock, and the account's quick unlock goes with it.
+            // Signed out of the desktop app, or its data removed, while unlocked: lock, and the quick unlock goes with it.
             ForgetQuickUnlockOfGoneAccounts(DesktopStore.AccountIds(path));
             Lock(keepForQuickUnlock: false);
         }
