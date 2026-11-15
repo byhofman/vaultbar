@@ -52,8 +52,8 @@ it was copied to be pasted; with no timer it is cleared at once.
 
 A page chooses its own title, so a look-alike page titled "Contoso: Sign in" used to get the real Contoso login offered
 first and filled on Enter (H1). In a browser, Vaultbar now reads the URL of the page itself from the accessibility tree:
-the value of the first on-screen document through UI Automation on Windows, the `AXURL` of the visible web area on
-macOS. That is what was loaded, not the address-bar text (which may be half-typed) and nothing a page can set. Frames are
+the value of the first on-screen document through UI Automation on Windows, on macOS the `AXURL` of the outermost web
+area above the focused element (the page the keystrokes go to), else of the only visible web area. That is what was loaded, not the address-bar text (which may be half-typed) and nothing a page can set. Frames are
 never read, hidden tabs are skipped by being off screen, and a window with two pages (a side panel) counts as unknown.
 Matching is Bitwarden's own `LoginUriView.matchesUri`: the six match options, the account's default and equivalent
 domains from `data.json`, the google.com/script.google.com exclusion, and base domains by the Public Suffix List with the
