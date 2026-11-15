@@ -214,6 +214,8 @@ vaultbar shortcut     Linux/GNOME: bind the hotkey through GNOME settings
 - **No Linux biometrics yet.** Windows Hello and Touch ID are Vaultbar's own (see above); the desktop app's biometric
   unlock is bound to that app and cannot be shared.
 - Screen-capture hiding is not available on Linux.
+- Firefox on macOS does not give Vaultbar a page address it can trust, so it gets no suggestions and every fill into it
+  asks for a second Enter. Firefox on Windows works.
 - Linux: browser addresses are not read yet, so a browser gets no suggestions and every fill into it asks for a second Enter.
 - Linux, Wayland: auto-type cannot check which window has focus, so it types into whatever has it after the bar closes.
 - Accounts without a master password (SSO with trusted devices or key connector) are not supported.
