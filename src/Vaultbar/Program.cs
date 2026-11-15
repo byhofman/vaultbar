@@ -18,6 +18,8 @@ internal static class Program
           autostart on|off start vaultbar when you log in
           shortcut         Linux/Wayland: bind the hotkey via GNOME settings
           version          print the version
+          report           report an issue: opens a new issue on github.com/byhofman/vaultbar with the
+                           version and system filled in; never paste anything from your vault
         """;
 
     [STAThread]
@@ -35,6 +37,9 @@ internal static class Program
                 case "version" or "v":
                     AttachConsole();
                     Console.WriteLine(typeof(Program).Assembly.GetName().Version?.ToString(3));
+                    return 0;
+                case "report":
+                    using (var platform = IPlatform.Create()) platform.OpenUrl(IssueReport.ForThisMachine());
                     return 0;
                 case "autostart":
                     AttachConsole();

@@ -2,6 +2,14 @@
 
 Non-obvious choices a reader could not predict from the code. Newest first.
 
+## D-22 Reporting an issue opens a prefilled GitHub issue — 2026-11-15
+
+The owner cut in-app feedback for Vaultbar (VBR-19) in favour of GitHub issues (VBR-29). The tray menu's "Report an
+issue…" and `vaultbar report` open `issues/new?template=report.yml` with the version and the operating system (with
+its architecture) as query parameters, which GitHub's issue forms fill into the fields of the same id. Only the browser
+talks to GitHub, so the VBR-16 rule that Vaultbar's only traffic is icons still holds, and nothing from the vault is
+in the address. The form asks for steps and what happened, and says in its first line never to paste vault contents.
+
 ## D-21 Downloads are watched from the cluster, the app reports nothing — 2026-11-15
 
 VBR-21 asks for the download page and the release downloads to be watched, with an alert, and no telemetry from the app.

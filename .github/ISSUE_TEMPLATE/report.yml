@@ -1,0 +1,38 @@
+name: Report an issue
+description: Something in Vaultbar does not work as it should.
+body:
+  - type: markdown
+    attributes:
+      value: >-
+        Never paste anything from your vault: no passwords, codes, notes, usernames, item names or website addresses
+        of your own. Vaultbar's log (vaultbar.log in its cache folder) holds none of those and may be attached.
+  - type: input
+    id: version
+    attributes:
+      label: Vaultbar version
+      description: Filled in when you use "Report an issue" in the tray menu or `vaultbar report`.
+      placeholder: 0.4.0
+    validations:
+      required: true
+  - type: input
+    id: os
+    attributes:
+      label: Operating system
+      placeholder: Windows 11 24H2 x64, macOS 26.1 arm64, Ubuntu 24.04 x64
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Press Ctrl+Shift+Space in Contoso Notes
+        2. Type "fab" and press Enter
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: What you expected, and what happened instead
+    validations:
+      required: true

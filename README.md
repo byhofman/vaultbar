@@ -138,7 +138,15 @@ vaultbar background   start without opening (used by autostart)
 vaultbar lock | quit
 vaultbar autostart on|off
 vaultbar shortcut     Linux/GNOME: bind the hotkey through GNOME settings
+vaultbar report       report an issue (see below)
 ```
+
+## Reporting an issue
+
+**Report an issue…** in the tray menu, or `vaultbar report`, opens a new issue on
+[github.com/byhofman/vaultbar](https://github.com/byhofman/vaultbar/issues/new?template=report.yml) with Vaultbar's
+version and your system filled in; the form asks for the steps. It needs a GitHub account. Vaultbar sends nothing
+itself: it only opens the page in your browser. Never paste anything from your vault into an issue.
 
 ## Configuration
 

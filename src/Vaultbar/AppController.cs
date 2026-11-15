@@ -209,6 +209,8 @@ public sealed class AppController
         open.Click += (_, _) => Show(null);
         var lockItem = new NativeMenuItem("Lock vault");
         lockItem.Click += (_, _) => Lock();
+        var report = new NativeMenuItem("Report an issue…");
+        report.Click += (_, _) => Platform.OpenUrl(IssueReport.ForThisMachine());
         var quit = new NativeMenuItem("Quit Vaultbar");
         quit.Click += (_, _) => Quit();
 
@@ -234,6 +236,7 @@ public sealed class AppController
             }
         }
         menu.Add(new NativeMenuItemSeparator());
+        menu.Add(report);
         menu.Add(quit);
 
         var tray = new TrayIcon
