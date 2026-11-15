@@ -91,7 +91,12 @@ public sealed class BrowserAddressTests : IDisposable
         }
     }
 
-    public static TheoryData<string, string> Mac() => new() { { "Safari", "Safari" }, { "Google Chrome", "Google Chrome" } };
+    public static TheoryData<string, string> Mac() => new()
+    {
+        // Not Firefox: its web area reports no size, so the read cannot tell it from a hidden tab and the address stays
+        // unknown, which makes every fill into Firefox ask for a second Enter (README, Limitations).
+        { "Safari", "Safari" }, { "Google Chrome", "Google Chrome" }, { "Microsoft Edge", "Microsoft Edge" },
+    };
 
     [BrowserTheory(Os = "macos")]
     [MemberData(nameof(Mac))]
@@ -105,10 +110,24 @@ public sealed class BrowserAddressTests : IDisposable
         File.WriteAllText(page, $"<!doctype html><title>{Marker}</title><h1>Contoso</h1>");
         var expected = new Uri(page).AbsoluteUri;
         var started = DateTime.Now.AddSeconds(-1);
-        string[] args = app == "Safari"
-            ? ["-a", app, expected]
-            : ["-na", app, "--args", $"--user-data-dir={Path.Combine(_dir, "profile")}", "--no-first-run", "--no-default-browser-check", "--use-mock-keychain", expected];
-        using (Process.Start("open", args)) { }
+        var profile = Path.Combine(_dir, "profile");
+        Directory.CreateDirectory(profile);
+        // Safari through Launch Services; the others straight from their binary, since on the runner a second instance
+        // started by open -n sits stopped (state T) and never answers.
+        var (file, args) = app switch
+        {
+            "Safari" => ("open", new[] { "-a", app, expected }),
+            "Firefox" => ($"/Applications/{app}.app/Contents/MacOS/firefox", new[] { "-no-remote", "-new-instance", "-profile", profile, expected }),
+            _ => ($"/Applications/{app}.app/Contents/MacOS/{app}", new[] { $"--user-data-dir={profile}", "--no-first-run", "--no-default-browser-check", "--use-mock-keychain", expected }),
+        };
+        if (app == "Firefox")
+            File.WriteAllText(Path.Combine(profile, "user.js"), """
+                user_pref("browser.aboutwelcome.enabled", false);
+                user_pref("browser.startup.homepage_override.mstone", "ignore");
+                user_pref("datareporting.policy.dataSubmissionPolicyBypassNotification", true);
+                user_pref("browser.shell.checkDefaultBrowser", false);
+                """);
+        using (Process.Start(new ProcessStartInfo(file, args) { RedirectStandardInput = true })) { }
         try
         {
             string? address = null;
@@ -119,7 +138,7 @@ public sealed class BrowserAddressTests : IDisposable
                 pid = Process.GetProcessesByName(process).Where(p => p.StartTime >= started).OrderBy(p => p.StartTime).Select(p => p.Id).FirstOrDefault();
                 if (pid != 0) address = MacBrowserAddress.Read(pid);
             }
-            Assert.True(expected == address, $"read {address ?? "nothing"}; {(pid == 0 ? "no process" : MacBrowserAddress.Describe(pid))}; processes: {string.Join(", ", Process.GetProcesses().Where(p => p.ProcessName.Contains(process, StringComparison.Ordinal)).Select(p => $"{p.ProcessName} {p.Id}"))}");
+            Assert.True(expected == address, $"read {address ?? "nothing"}; {(pid == 0 ? "no process" : MacBrowserAddress.Describe(pid))}; processes: {string.Join(", ", Process.GetProcesses().Where(p => p.ProcessName.Contains(process, StringComparison.OrdinalIgnoreCase)).Select(p => $"{p.ProcessName} {p.Id}"))}; windows: {Run("/bin/sh", "-c", $"osascript -e 'tell application \"System Events\" to get name of every window of (every process whose unix id is {pid})' 2>&1; ps -o stat=,etime= -p {pid}")}");
         }
         finally
         {
@@ -134,6 +153,13 @@ public sealed class BrowserAddressTests : IDisposable
                 }
             }
         }
+    }
+
+    private static string Run(string file, params string[] args)
+    {
+        using var p = Process.Start(new ProcessStartInfo(file, args) { RedirectStandardOutput = true, RedirectStandardError = true })!;
+        p.WaitForExit(15000);
+        return (p.StandardOutput.ReadToEnd() + p.StandardError.ReadToEnd()).Trim();
     }
 
     [System.Runtime.InteropServices.DllImport("/System/Library/Frameworks/ApplicationServices.framework/ApplicationServices", EntryPoint = "AXIsProcessTrusted")]
