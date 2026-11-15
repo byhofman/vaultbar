@@ -74,8 +74,9 @@ public sealed class BrowserAddressTests : IDisposable
                 if (address != expected) await Task.Delay(500);
             }
             Assert.Equal(expected, address);
-            // An unlisted browser or web view is recognised the same way.
-            Assert.Equal(expected, WindowsBrowserAddress.Read(window, knownBrowser: false));
+            // An unlisted Chromium browser or web view (WebView2, Electron) is recognised the same way. Firefox reaches UI
+            // Automation through its MSAA bridge, which does not name the framework, so it is known by name only.
+            if (browser != "firefox") Assert.Equal(expected, WindowsBrowserAddress.Read(window, knownBrowser: false));
         }
         finally
         {
