@@ -28,7 +28,6 @@ internal static unsafe class MacBrowserAddress
     private static readonly TimeSpan Budget = TimeSpan.FromSeconds(3);
 
     private static readonly TimeSpan ProbeBudget = TimeSpan.FromMilliseconds(300);
-    private static readonly HashSet<int> AskedForWebTree = [];
 
     /// <param name="knownBrowser">False for any other app: one quick look, to catch browsers and web views not on the list.</param>
     public static string? Read(int pid, bool knownBrowser = true) => Read(pid, knownBrowser, knownBrowser ? Budget : ProbeBudget);
@@ -89,10 +88,8 @@ internal static unsafe class MacBrowserAddress
             // A hung browser must not hold up the bar for the system's default of six seconds.
             AXUIElementSetMessagingTimeout(app, 1f);
             // Chromium browsers build their web accessibility tree only for assistive apps that ask for it this way. Asked
-            // once per process: it stays on, and asking again would only rebuild it.
-            bool ask;
-            lock (AskedForWebTree) ask = askForWebTree && AskedForWebTree.Add(pid);
-            if (ask) AXUIElementSetAttributeValue(app, ManualAccessibility, ObjC.Send(ObjC.Class("NSNumber"), ObjC.Sel("numberWithBool:"), 1));
+            // on every read: a browser that was asked before its window existed never builds it (seen on Chrome and Edge).
+            if (askForWebTree) AXUIElementSetAttributeValue(app, ManualAccessibility, ObjC.Send(ObjC.Class("NSNumber"), ObjC.Sel("numberWithBool:"), 1));
             return read(app);
         }
         finally
