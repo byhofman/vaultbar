@@ -95,10 +95,12 @@ internal static unsafe class MacBrowserAddress
             // on every read: a browser that was asked before its window existed never builds it (seen on Chrome and Edge).
             if (askForWebTree)
             {
+                // Newer Chromium answers AXManualAccessibility with "unsupported" and turns its page tree on when an
+                // assistive app asks the application for its role, windows and focused window first, as screen readers
+                // do. In that order the page appeared on the CI runner; with the request alone it never did.
+                foreach (var attribute in new[] { Role, Windows, FocusedWindow })
+                    if (AXUIElementCopyAttributeValue(app, attribute, out var value) == 0 && value != 0) CFRelease(value);
                 AXUIElementSetAttributeValue(app, ManualAccessibility, ObjC.Send(ObjC.Class("NSNumber"), ObjC.Sel("numberWithBool:"), 1));
-                // Newer Chromium no longer knows AXManualAccessibility; it turns its page tree on once an assistive app
-                // has asked for its windows, which is what the diagnostics did when the page appeared.
-                if (AXUIElementCopyAttributeValue(app, Windows, out var windows) == 0 && windows != 0) CFRelease(windows);
             }
             return read(app);
         }
