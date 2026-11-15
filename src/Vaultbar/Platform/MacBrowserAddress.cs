@@ -19,6 +19,7 @@ internal static unsafe class MacBrowserAddress
     private const int MaxElements = 1500, KAxValueCgSizeType = 2;
 
     private static readonly nint Children = Retained("AXChildren"), Role = Retained("AXRole"), Url = Retained("AXURL");
+    private static readonly nint FocusedElement = Retained("AXFocusedUIElement"), Parent = Retained("AXParent");
     private static readonly nint Size = Retained("AXSize"), FocusedWindow = Retained("AXFocusedWindow"), MainWindow = Retained("AXMainWindow");
     private static readonly nint WebArea = Retained("AXWebArea"), ManualAccessibility = Retained("AXManualAccessibility");
 
@@ -35,6 +36,7 @@ internal static unsafe class MacBrowserAddress
         var deadline = DateTime.UtcNow + (knownBrowser ? Budget : ProbeBudget);
         while (DateTime.UtcNow < deadline)
         {
+            if (FocusedPage(app) is { Length: > 0 } focused) return focused;
             if (Scan(app, deadline) is { Complete: true } scan && scan.Visible is [{ Length: > 0 } address]) return address;
             Thread.Sleep(80);
         }
@@ -84,6 +86,37 @@ internal static unsafe class MacBrowserAddress
         finally
         {
             CFRelease(app);
+        }
+    }
+
+    /// <summary>
+    /// The page that holds the keyboard focus, found by walking up from the focused element: a few calls instead of a walk
+    /// of the whole window, and exactly the page the keystrokes will go to. The outermost web area counts, so a frame
+    /// inside the page never does. Null when the focus is outside any page, such as in the address bar.
+    /// </summary>
+    private static string? FocusedPage(nint app)
+    {
+        if (AXUIElementCopyAttributeValue(app, FocusedElement, out var element) != 0 || element == 0) return null;
+        nint outermost = 0;
+        try
+        {
+            for (var depth = 0; depth < 100 && element != 0; depth++)
+            {
+                if (IsWebArea(element))
+                {
+                    if (outermost != 0) CFRelease(outermost);
+                    outermost = CFRetain(element);
+                }
+                var next = AXUIElementCopyAttributeValue(element, Parent, out var parent) == 0 ? parent : 0;
+                CFRelease(element);
+                element = next;
+            }
+            return outermost != 0 && IsVisible(outermost) ? UrlOf(outermost) : null;
+        }
+        finally
+        {
+            if (element != 0) CFRelease(element);
+            if (outermost != 0) CFRelease(outermost);
         }
     }
 
