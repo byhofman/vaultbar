@@ -14,7 +14,7 @@ namespace Vaultbar.Platform;
 internal static unsafe class WindowsBrowserAddress
 {
     private const int UIA_ControlTypePropertyId = 30003, UIA_IsOffscreenPropertyId = 30022, UIA_ValueValuePropertyId = 30045;
-    private const int UIA_LegacyIAccessibleValuePropertyId = 30093, UIA_DocumentControlTypeId = 50030, TreeScope_Descendants = 4;
+    private const int UIA_LegacyIAccessibleValuePropertyId = 30093, UIA_FrameworkIdPropertyId = 30024, UIA_DocumentControlTypeId = 50030, TreeScope_Descendants = 4;
     private const ushort VT_I4 = 3, VT_BSTR = 8, VT_BOOL = 11;
 
     // IUIAutomation and IUIAutomationElement vtable slots, IUnknown's three first (UIAutomationClient.h).
@@ -34,19 +34,19 @@ internal static unsafe class WindowsBrowserAddress
     public static string? Read(nint hwnd, bool knownBrowser = true)
     {
         // UI Automation clients belong on a multithreaded apartment, never on the UI thread that hosts the bar.
-        var read = Task.Run(() => ReadWithRetries(hwnd, knownBrowser ? 6 : 1));
+        var read = Task.Run(() => ReadWithRetries(hwnd, knownBrowser));
         return read.Wait(knownBrowser ? Budget : ProbeBudget) ? read.Result : null;
     }
 
-    private static string? ReadWithRetries(nint hwnd, int attempts)
+    private static string? ReadWithRetries(nint hwnd, bool knownBrowser)
     {
         CoInitializeEx(0, 0 /* COINIT_MULTITHREADED */);
         // Chromium builds its accessibility tree only once a client asks, so the first look can find an empty document.
-        for (var attempt = 0; attempt < attempts; attempt++)
+        for (var attempt = 0; attempt < (knownBrowser ? 6 : 1); attempt++)
         {
             try
             {
-                if (ReadOnce(hwnd) is { Length: > 0 } address) return address;
+                if (ReadOnce(hwnd, knownBrowser) is { Length: > 0 } address) return address;
             }
             catch (Exception ex) when (ex is COMException or InvalidOperationException)
             {
@@ -58,7 +58,11 @@ internal static unsafe class WindowsBrowserAddress
         return null;
     }
 
-    private static string? ReadOnce(nint hwnd)
+    // Web content: Chromium (WebView2 and Electron too) and Firefox. In any other app a Document holds its text, which
+    // a file could fill with a web address.
+    private static readonly string[] WebFrameworks = ["Chrome", "Gecko"];
+
+    private static string? ReadOnce(nint hwnd, bool knownBrowser)
     {
         var clsid = ClsidCuiAutomation;
         var iid = IidIuiAutomation;
@@ -73,6 +77,7 @@ internal static unsafe class WindowsBrowserAddress
             Check(((delegate* unmanaged[Stdcall]<nint, nint, nint, nint*, int>)Slot(automation, CreateAndCondition))(automation, isDocument, onScreen, &both));
             Check(((delegate* unmanaged[Stdcall]<nint, int, nint, nint*, int>)Slot(window, FindFirst))(window, TreeScope_Descendants, both, &document));
             if (document == 0) return null;
+            if (!knownBrowser && !WebFrameworks.Contains(StringProperty(document, UIA_FrameworkIdPropertyId))) return null;
             if (Count(window, both) != Count(document, both) + 1) return null;
             return StringProperty(document, UIA_ValueValuePropertyId) is { Length: > 0 } value
                 ? value
