@@ -246,8 +246,10 @@ internal static class Program
 
     private static async Task FillAndOpenAsync()
     {
+        // The field copied just before clears after its 2 s; only then does an empty clipboard prove nothing was copied.
+        await UntilAsync(() => Clipboard == "", 4000);
         N.Key(N.Enter, "\r");
-        Check("Enter without Accessibility offers the copy key and copies nothing", await UntilAsync(() => Toast.Contains("Can't auto-type") && Toast.Contains("⌘+⇧+C")) && Clipboard != "gh-Secr3t!pass", Toast);
+        Check("Enter without Accessibility offers the copy key and copies nothing", await UntilAsync(() => Toast.Contains("Can't auto-type") && Toast.Contains("⌘+⇧+C")) && Clipboard == "", $"{Toast} | clipboard: {(Clipboard == "" ? "empty" : "not empty")}");
 
         Find<TextBox>("SearchBox").Text = "github";
         await UntilAsync(() => Rows.FirstOrDefault()?.Title == "GitHub");
@@ -378,7 +380,7 @@ internal static class Program
         await UnlockAgainAsync();
         var prompts = device.Prompts;
         ClickTray(items, "Unlock with Touch ID");
-        Check("turning it on from the tray asks once and sets it up", await UntilAsync(() => vault.CanQuickUnlock) && device.Prompts == prompts + 1, $"prompts={device.Prompts - prompts}");
+        Check("turning it on from the tray asks once and sets it up", await UntilAsync(() => vault.QuickUnlockSetting == QuickUnlockSetting.On) && device.Prompts == prompts + 1, $"prompts={device.Prompts - prompts}");
 
         vault.Lock();
         Reopen();
