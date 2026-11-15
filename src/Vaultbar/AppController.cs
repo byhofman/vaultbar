@@ -13,6 +13,7 @@ public sealed class AppController
     private readonly IClassicDesktopStyleApplicationLifetime _lifetime;
     private readonly CancellationTokenSource _shutdown = new();
     private QuickWindow? _window;
+    private bool _lockingOnHide;
 
     internal AppController(IClassicDesktopStyleApplicationLifetime lifetime, IPlatform platform)
     {
@@ -61,19 +62,24 @@ public sealed class AppController
         Ipc.StartServer(OnCommand, _shutdown.Token);
         Platform.WatchSystemLock(() => Dispatcher.UIThread.Post(() =>
         {
-            if (Config.LockOnSystemLock) Lock();
+            if (Config.LockOnSystemLock || Vault.LockPolicy.OnSystemLock) Lock();
         }));
-        Vault.Changed += () => Dispatcher.UIThread.Post(() =>
+        Vault.Changed += () =>
         {
-            // The vault also locks itself, when the desktop app switches accounts.
-            if (Vault.State != VaultState.Unlocked) _ = ClearCopiedSecretAsync();
-            _window?.OnVaultChanged();
-        });
+            // Read here, not in the posted callback: Changed runs inside the Lock call that OnBarHidden makes.
+            var clear = Vault.State != VaultState.Unlocked && !_lockingOnHide;
+            Dispatcher.UIThread.Post(() =>
+            {
+                // The vault also locks itself, when the desktop app switches accounts.
+                if (clear) _ = ClearCopiedSecretAsync();
+                _window?.OnVaultChanged();
+            });
+        };
 
         var idle = new DispatcherTimer { Interval = TimeSpan.FromSeconds(20) };
         idle.Tick += (_, _) =>
         {
-            if (Vault.IdleExpired && _window?.IsVisible != true) Lock();
+            if (Vault.State == VaultState.Unlocked && Vault.LockPolicy.IdleExpired(Vault.IdleFor, Platform.SystemIdleTime())) Lock();
         };
         idle.Start();
 
@@ -131,6 +137,26 @@ public sealed class AppController
     {
         Vault.Lock();
         _ = ClearCopiedSecretAsync();
+        _window?.OnVaultChanged();
+    }
+
+    /// <summary>
+    /// The bar closed. Bitwarden's "Immediately" locks now; a secret copied in this opening stays on the clipboard for
+    /// its clear timer, since it was copied to be pasted, but one with no timer is cleared as on every lock.
+    /// </summary>
+    public void OnBarHidden()
+    {
+        if (!Vault.LockPolicy.OnBarHidden || Vault.State != VaultState.Unlocked) return;
+        _lockingOnHide = true;
+        try
+        {
+            Vault.Lock();
+        }
+        finally
+        {
+            _lockingOnHide = false;
+        }
+        _ = Clipboard.ClearUnlessTimedAsync();
         _window?.OnVaultChanged();
     }
 

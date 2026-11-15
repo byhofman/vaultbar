@@ -2,6 +2,19 @@
 
 Non-obvious choices a reader could not predict from the code. Newest first.
 
+## D-15 Bitwarden's vault timeout, value by value — 2026-11-15
+
+Only a positive number of minutes used to count; "Immediately", "On system idle", "never" and the legacy negatives all
+meant no idle lock (M4). Now: minutes as set; `0` locks when the bar closes; `onIdle`/`-4` lock after 5 minutes without
+input anywhere (Bitwarden's own threshold; the bar's idle time stands in where the system does not say); `onSleep`,
+`onLocked` and their negatives lock on sleep and screen lock even with `lockOnSystemLock` off. `0`, `onSleep` and
+`onLocked` keep the 15-minute idle lock as a backstop, since the vault can be unlocked while the bar is hidden and the
+Linux session-lock signals may be missing. `onRestart`, `never`, `custom` and a missing value lock after 15 idle minutes:
+Vaultbar runs for weeks, so "until restart" would mean the same as never. `lockAfterMinutes` still overrides everything,
+with `0` as the explicit way to turn automatic locking off. Idle time now counts while the bar is open, from the last key
+or click in it. Under "Immediately", a secret copied in that opening stays on the clipboard for its clear timer, because
+it was copied to be pasted; with no timer it is cleared at once.
+
 ## D-14 Browsers are matched by the loaded document's address — 2026-11-15
 
 A page chooses its own title, so a look-alike page titled "Contoso: Sign in" used to get the real Contoso login offered

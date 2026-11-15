@@ -93,6 +93,13 @@ internal sealed class WindowsPlatform : IPlatform
         return new ForeignWindow(hwnd, title, app, (int)pid) { IsBrowser = browser, Address = browser ? address : null, KnownBrowser = known };
     }
 
+    public TimeSpan? SystemIdleTime()
+    {
+        var info = new Native.LASTINPUTINFO { cbSize = (uint)Marshal.SizeOf<Native.LASTINPUTINFO>() };
+        // dwTime is GetTickCount's 32-bit clock, so the difference is taken in 32 bits to survive its wrap every 49 days.
+        return Native.GetLastInputInfo(ref info) != 0 ? TimeSpan.FromMilliseconds(unchecked((uint)Environment.TickCount - info.dwTime)) : null;
+    }
+
     public string? BrowserAddress(ForeignWindow browser) => WindowsBrowserAddress.Read(browser.Handle, Browsers.IsBrowserApp(browser.App));
 
     private static readonly string[] ShellClasses =
@@ -285,6 +292,12 @@ internal sealed class WindowsPlatform : IPlatform
         }
 
         [StructLayout(LayoutKind.Sequential)]
+        public struct LASTINPUTINFO
+        {
+            public uint cbSize, dwTime;
+        }
+
+        [StructLayout(LayoutKind.Sequential)]
         public struct RECT
         {
             public int Left, Top, Right, Bottom;
@@ -337,6 +350,7 @@ internal sealed class WindowsPlatform : IPlatform
             u = new InputUnion { ki = new KEYBDINPUT { wVk = vk, wScan = scan, dwFlags = flags } },
         };
 
+        [DllImport("user32.dll")] public static extern int GetLastInputInfo(ref LASTINPUTINFO info);
         [DllImport("user32.dll")] public static extern int RegisterHotKey(nint hWnd, int id, uint mods, uint vk);
         [DllImport("user32.dll")] public static extern int UnregisterHotKey(nint hWnd, int id);
         [DllImport("user32.dll")] public static extern int GetMessageW(out MSG msg, nint hWnd, uint min, uint max);

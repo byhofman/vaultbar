@@ -148,7 +148,7 @@ vaultbar shortcut     Linux/GNOME: bind the hotkey through GNOME settings
 | Setting | Default | |
 | --- | --- | --- |
 | `hotkey` | `Ctrl+Shift+Space` (`Cmd+Shift+Space` on macOS) | Modifiers `Ctrl`, `Shift`, `Alt`/`Option`, `Win`/`Super`/`Cmd` + `A`–`Z`, `0`–`9`, `F1`–`F24` (macOS `F1`–`F20`), `Space` |
-| `lockAfterMinutes` | `null` | Idle lock. `null` follows the Bitwarden desktop vault timeout (numeric values; "on restart"/"never" mean no idle lock) |
+| `lockAfterMinutes` | `null` | Idle lock in minutes, counted while the bar is open too; `0` turns every automatic lock off, the Bitwarden timeout included. `null` follows the Bitwarden desktop vault timeout: minutes as set, "Immediately" locks when the bar closes, "On system idle" after 5 minutes without input, "On system lock" and "On sleep" lock then (both also after 15 idle minutes); "On restart" and "Never" lock after 15 idle minutes |
 | `lockOnSystemLock` | `true` | Lock when the session locks or the machine sleeps |
 | `clipboardClearSeconds` | `30` | `0` disables clearing |
 | `autotypeSequence` | `{USERNAME}{TAB}{PASSWORD}` | Tokens: `{USERNAME}` `{PASSWORD}` `{TOTP}` `{TAB}` `{ENTER}` `{DELAY:ms}`. Without a username, the following `{TAB}` is skipped |

@@ -118,6 +118,7 @@ public partial class QuickWindow : Window
         SearchBox.Text = "";
         PasswordBox.Text = "";
         ForgetItems();
+        _app.OnBarHidden();
     }
 
     public void OnVaultChanged()
@@ -669,10 +670,13 @@ public partial class QuickWindow : Window
                     return;
             }
 
+            // The code is read before the bar closes: closing it locks the vault when the timeout is "Immediately".
+            var code = _app.Config.CopyTotpAfterFill && item.HasTotp && !template.Contains("{TOTP}", StringComparison.OrdinalIgnoreCase)
+                ? item.CurrentTotp()
+                : null;
+            var copying = code is null ? Task.CompletedTask : _app.CopyAsync(code, true);
             Dismiss();
-            if (_app.Config.CopyTotpAfterFill && item.HasTotp && !template.Contains("{TOTP}", StringComparison.OrdinalIgnoreCase)
-                && item.CurrentTotp() is { } code)
-                await _app.CopyAsync(code, true);
+            await copying;
         });
     }
 
@@ -972,6 +976,7 @@ public partial class QuickWindow : Window
 
     private void OnResultPointerPressed(object? sender, PointerPressedEventArgs e)
     {
+        _app.Vault.Touch();
         if (_mode != Mode.Search || e.Source is not StyledElement { DataContext: ResultRow row }) return;
         var index = _rows.IndexOf(row);
         if (index < 0) return;
@@ -982,6 +987,7 @@ public partial class QuickWindow : Window
 
     private void OnDetailPointerPressed(object? sender, PointerPressedEventArgs e)
     {
+        _app.Vault.Touch();
         if (_mode != Mode.Details || e.Source is not StyledElement { DataContext: DetailRow row }) return;
         SelectDetail(_details.IndexOf(row));
         if (e.ClickCount >= 2) _ = CopyFieldAsync(row);

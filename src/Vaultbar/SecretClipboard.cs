@@ -46,6 +46,14 @@ public sealed class SecretClipboard(IClipboardAccess clipboard, int clearAfterSe
         }
     }
 
+    /// <summary>Clears a copied secret now unless its clear timer is still running, which will clear it shortly.</summary>
+    public Task ClearUnlessTimedAsync()
+    {
+        lock (_gate)
+            if (_timer != null) return Task.CompletedTask;
+        return ClearNowAsync();
+    }
+
     public async Task ClearNowAsync()
     {
         object token;
