@@ -26,9 +26,13 @@ internal static unsafe class MacBrowserAddress
     /// <remarks>A walk of a browser window takes a hundred or so calls into the browser; on a slow machine they need it.</remarks>
     private static readonly TimeSpan Budget = TimeSpan.FromSeconds(3);
 
-    public static string? Read(int pid) => WithApp(pid, app =>
+    private static readonly TimeSpan ProbeBudget = TimeSpan.FromMilliseconds(300);
+    private static readonly HashSet<int> AskedForWebTree = [];
+
+    /// <param name="knownBrowser">False for any other app: one quick look, to catch browsers and web views not on the list.</param>
+    public static string? Read(int pid, bool knownBrowser = true) => WithApp(pid, knownBrowser, app =>
     {
-        var deadline = DateTime.UtcNow + Budget;
+        var deadline = DateTime.UtcNow + (knownBrowser ? Budget : ProbeBudget);
         while (DateTime.UtcNow < deadline)
         {
             if (Scan(app, deadline) is { Complete: true } scan && scan.Visible is [{ Length: > 0 } address]) return address;
@@ -61,7 +65,7 @@ internal static unsafe class MacBrowserAddress
         }
     }
 
-    private static T? WithApp<T>(int pid, Func<nint, T?> read)
+    private static T? WithApp<T>(int pid, bool askForWebTree, Func<nint, T?> read)
     {
         if (AXIsProcessTrusted() == 0) return default;
         var app = AXUIElementCreateApplication(pid);
@@ -70,8 +74,11 @@ internal static unsafe class MacBrowserAddress
         {
             // A hung browser must not hold up the bar for the system's default of six seconds.
             AXUIElementSetMessagingTimeout(app, 1f);
-            // Chromium browsers build their web accessibility tree only for assistive apps that ask for it this way.
-            AXUIElementSetAttributeValue(app, ManualAccessibility, ObjC.Send(ObjC.Class("NSNumber"), ObjC.Sel("numberWithBool:"), 1));
+            // Chromium browsers build their web accessibility tree only for assistive apps that ask for it this way. Asked
+            // once per process: it stays on, and asking again would only rebuild it.
+            bool ask;
+            lock (AskedForWebTree) ask = askForWebTree && AskedForWebTree.Add(pid);
+            if (ask) AXUIElementSetAttributeValue(app, ManualAccessibility, ObjC.Send(ObjC.Class("NSNumber"), ObjC.Sel("numberWithBool:"), 1));
             return read(app);
         }
         finally

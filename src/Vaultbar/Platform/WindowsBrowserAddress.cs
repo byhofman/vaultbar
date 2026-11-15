@@ -27,18 +27,22 @@ internal static unsafe class WindowsBrowserAddress
     /// <summary>How long a hung browser may hold up the bar before the address counts as unknown.</summary>
     private static readonly TimeSpan Budget = TimeSpan.FromMilliseconds(1500);
 
-    public static string? Read(nint hwnd)
+    /// <summary>How long an app that is not a known browser may take to show whether it has a web page at all.</summary>
+    private static readonly TimeSpan ProbeBudget = TimeSpan.FromMilliseconds(300);
+
+    /// <param name="knownBrowser">False for any other app: one quick look, to catch browsers and web views not on the list.</param>
+    public static string? Read(nint hwnd, bool knownBrowser = true)
     {
         // UI Automation clients belong on a multithreaded apartment, never on the UI thread that hosts the bar.
-        var read = Task.Run(() => ReadWithRetries(hwnd));
-        return read.Wait(Budget) ? read.Result : null;
+        var read = Task.Run(() => ReadWithRetries(hwnd, knownBrowser ? 6 : 1));
+        return read.Wait(knownBrowser ? Budget : ProbeBudget) ? read.Result : null;
     }
 
-    private static string? ReadWithRetries(nint hwnd)
+    private static string? ReadWithRetries(nint hwnd, int attempts)
     {
         CoInitializeEx(0, 0 /* COINIT_MULTITHREADED */);
         // Chromium builds its accessibility tree only once a client asks, so the first look can find an empty document.
-        for (var attempt = 0; attempt < 6; attempt++)
+        for (var attempt = 0; attempt < attempts; attempt++)
         {
             try
             {
