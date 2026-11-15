@@ -36,15 +36,24 @@ internal static unsafe class MacBrowserAddress
     /// <param name="budget">Only a test passes its own, on a runner where each call into a browser is slow.</param>
     internal static string? Read(int pid, bool knownBrowser, TimeSpan budget) => WithApp(pid, knownBrowser, app =>
     {
-        var deadline = DateTime.UtcNow + budget;
+        var started = DateTime.UtcNow;
+        var deadline = started + budget;
+        var attempts = 0;
         while (DateTime.UtcNow < deadline)
         {
+            attempts++;
             if (FocusedPage(app) is { Length: > 0 } focused) return focused;
-            if (Scan(app, deadline) is { Complete: true } scan && scan.Visible is [{ Length: > 0 } address]) return address;
+            var scan = Scan(app, deadline);
+            LastAttempt = scan is null ? "no window" : $"{scan.Visited} elements, complete={scan.Complete}, visible: {scan.Visible.Count}";
+            if (scan is { Complete: true } && scan.Visible is [{ Length: > 0 } address]) return address;
             Thread.Sleep(80);
         }
+        LastAttempt += $"; {attempts} attempts in {(DateTime.UtcNow - started).TotalSeconds:0.0} s";
         return null;
     });
+
+    /// <summary>What the last read that found nothing saw, for a test to report.</summary>
+    internal static string? LastAttempt { get; private set; }
 
     /// <summary>What a read finds, for a test to say why it found no address.</summary>
     internal static string Describe(int pid)
