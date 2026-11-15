@@ -197,4 +197,15 @@ public class AddressMatchTests : IDisposable
     {
         Assert.Equal(expected, Browsers.IsBrowserBundle(bundle));
     }
+
+    [Theory]
+    [InlineData("https://app.contoso.com/", true)]
+    [InlineData("http://intranet.example.org/", true)]
+    [InlineData("vscode-file://vscode-app/index.html", false)]
+    [InlineData("file:///C:/Users/alex/page.html", false)]
+    [InlineData(null, false)]
+    public void AnUnlistedAppShowingAWebPage_CountsAsABrowser(string? address, bool expected)
+    {
+        Assert.Equal(expected, Browsers.IsWebAddress(address));
+    }
 }

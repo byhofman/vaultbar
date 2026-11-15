@@ -148,7 +148,7 @@ vaultbar shortcut     Linux/GNOME: bind the hotkey through GNOME settings
 | Setting | Default | |
 | --- | --- | --- |
 | `hotkey` | `Ctrl+Shift+Space` (`Cmd+Shift+Space` on macOS) | Modifiers `Ctrl`, `Shift`, `Alt`/`Option`, `Win`/`Super`/`Cmd` + `A`–`Z`, `0`–`9`, `F1`–`F24` (macOS `F1`–`F20`), `Space` |
-| `lockAfterMinutes` | `null` | Idle lock in minutes, counted while the bar is open too; `0` turns it off. `null` follows the Bitwarden desktop vault timeout: minutes as set, "Immediately" locks when the bar closes, "On system idle" after 5 minutes without input, "On system lock" and "On sleep" lock then; "On restart" and "Never" lock after 15 idle minutes |
+| `lockAfterMinutes` | `null` | Idle lock in minutes, counted while the bar is open too; `0` turns every automatic lock off, the Bitwarden timeout included. `null` follows the Bitwarden desktop vault timeout: minutes as set, "Immediately" locks when the bar closes, "On system idle" after 5 minutes without input, "On system lock" and "On sleep" lock then (both also after 15 idle minutes); "On restart" and "Never" lock after 15 idle minutes |
 | `lockOnSystemLock` | `true` | Lock when the session locks or the machine sleeps |
 | `clipboardClearSeconds` | `30` | `0` disables clearing |
 | `autotypeSequence` | `{USERNAME}{TAB}{PASSWORD}` | Tokens: `{USERNAME}` `{PASSWORD}` `{TOTP}` `{TAB}` `{ENTER}` `{DELAY:ms}`. Without a username, the following `{TAB}` is skipped |
@@ -183,11 +183,12 @@ vaultbar shortcut     Linux/GNOME: bind the hotkey through GNOME settings
   screen locker over D-Bus, `loginctl lock-session` and suspend). Locking also lets go of every item the bar was showing.
 - Re-prompt items require the master password again (Windows Hello or Touch ID only with `repromptWithQuickUnlock`). A password only counts if it unwraps the key the
   vault is unlocked with.
-- **Quick unlock lasts until Vaultbar quits.** While it runs, locking keeps the vault's user key in memory, encrypted
-  under a random key that never leaves memory, and Windows Hello or Touch ID opens it again. After a restart or a
-  reboot the master password is needed once. With `quickUnlockAcrossRestarts` on, the user key is also kept on disk,
+- **Quick unlock lasts until Vaultbar quits.** While it runs, locking keeps the vault's user key in memory, sealed
+  under a random key held next to it, and Windows Hello or Touch ID opens it again; a memory dump taken while locked
+  could recover it, as with Bitwarden's own in-memory biometric unlock. After a restart or a reboot, and at the latest
+  `quickUnlockMaxAgeDays` after the last one, the master password is needed again. With `quickUnlockAcrossRestarts` on, the user key is also kept on disk,
   encrypted with a key only the device can derive, for `quickUnlockMaxAgeDays` (14) after the last master-password
-  unlock. Signing out of an account in the desktop app removes its quick unlock.
+  unlock. Signing out of an account in the desktop app, or removing the app's data, removes its quick unlock.
 - **Windows Hello:** after the first master-password unlock Vaultbar creates its own Windows Hello key. Its signature
   over a random challenge must reproduce a verifier bound to the account and the user key, and with persistence on it
   derives the AES-256-GCM key for the copy on disk (`%LOCALAPPDATA%\vaultbar\quick-unlock.dat`, wrapped once more
@@ -236,6 +237,8 @@ vaultbar shortcut     Linux/GNOME: bind the hotkey through GNOME settings
 - Screen-capture hiding is not available on Linux.
 - Auto-type sends keystrokes as a keyboard does, so an app running as you that watches the keyboard sees them, as it
   would see your typing. When auto-type cannot run, Vaultbar does not copy the password by itself; it shows the copy key.
+- Firefox on macOS does not give Vaultbar a page address it can trust, so it gets no suggestions and every fill into it
+  asks for a second Enter. Firefox on Windows works.
 - Linux: browser addresses are not read yet, so a browser gets no suggestions and every fill into it asks for a second Enter.
 - Linux, Wayland: auto-type cannot check which window has focus, so it types into whatever has it after the bar closes.
 - Accounts without a master password (SSO with trusted devices or key connector) are not supported.
