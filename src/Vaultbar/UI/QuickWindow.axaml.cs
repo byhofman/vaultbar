@@ -168,7 +168,9 @@ public partial class QuickWindow : Window
                 SetMode(Mode.Locked);
                 ShowMessage($"Unlock {vault.Email}", vault.CanQuickUnlock
                     ? $"Use {vault.QuickUnlock!.Name}, or enter your Bitwarden master password."
-                    : "Enter your Bitwarden master password. Vaultbar reads the vault that the Bitwarden desktop app keeps on this device.");
+                    : vault.QuickUnlockSetting == QuickUnlockSetting.On
+                        ? $"Enter your Bitwarden master password once; after that {vault.QuickUnlock!.Name} unlocks until Vaultbar quits."
+                        : "Enter your Bitwarden master password. Vaultbar reads the vault that the Bitwarden desktop app keeps on this device.");
                 break;
             case VaultState.Error:
                 SetMode(Mode.Message);
@@ -532,7 +534,8 @@ public partial class QuickWindow : Window
             return;
         }
 
-        if (_app.Vault.CanQuickUnlock)
+        // Enrolled is enough: the check signs the challenge and verifies it against the open key, needing nothing stored.
+        if (_app.Vault.QuickUnlockSetting == QuickUnlockSetting.On)
         {
             var before = _mode;
             SetMode(Mode.Busy);

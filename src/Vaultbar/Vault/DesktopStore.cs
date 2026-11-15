@@ -44,6 +44,29 @@ public static class DesktopStore
             .FirstOrDefault();
     }
 
+    /// <returns>
+    /// The accounts signed in to the desktop app, which is empty when none is or the file is gone; null when the file
+    /// could not be read, which says nothing about them.
+    /// </returns>
+    public static IReadOnlyList<string>? AccountIds(string? path)
+    {
+        if (path is null || !File.Exists(path)) return [];
+        for (var attempt = 0; ; attempt++)
+        {
+            try
+            {
+                using var fs = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
+                var root = JsonNode.Parse(fs) as JsonObject;
+                return (root?["global_account_accounts"] as JsonObject)?.Select(a => a.Key).ToList() ?? [];
+            }
+            catch (Exception ex) when (ex is JsonException or IOException)
+            {
+                if (attempt >= 5) return null;
+                Thread.Sleep(150);
+            }
+        }
+    }
+
     public static StoreSnapshot Read(string path)
     {
         for (var attempt = 0; ; attempt++)
@@ -112,6 +135,7 @@ public static class DesktopStore
         {
             Path = path,
             UserId = uid,
+            AccountIds = (root["global_account_accounts"] as JsonObject)?.Select(a => a.Key).ToList() ?? [uid],
             Email = email,
             Salt = salt,
             Kdf = kdf,

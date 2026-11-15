@@ -159,6 +159,8 @@ vaultbar shortcut     Linux/GNOME: bind the hotkey through GNOME settings
 | `hideFromScreenCapture` | `true` | Keep the search bar out of screenshots, recordings and screen sharing (Windows, macOS) |
 | `windowsHello` | `true` | Offer Windows Hello unlock after a master-password unlock. Turn it on or off later from the tray menu |
 | `touchId` | `true` | The same for Touch ID on macOS |
+| `quickUnlockAcrossRestarts` | `false` | Keep the Windows Hello / Touch ID unlock across restarts and reboots instead of asking for the master password once per run |
+| `quickUnlockMaxAgeDays` | `14` | With the above, how many days after the last master-password unlock the stored key still works |
 
 ## How it works and security
 
@@ -177,14 +179,21 @@ vaultbar shortcut     Linux/GNOME: bind the hotkey through GNOME settings
   screen locker over D-Bus, `loginctl lock-session` and suspend). Locking also lets go of every item the bar was showing.
 - Re-prompt items require Windows Hello, Touch ID or the master password again. A password only counts if it unwraps the key the
   vault is unlocked with.
+- **Quick unlock lasts until Vaultbar quits.** While it runs, locking keeps the vault's user key in memory, sealed
+  under a random key held next to it, and Windows Hello or Touch ID opens it again; a memory dump taken while locked
+  could recover it, as with Bitwarden's own in-memory biometric unlock. After a restart or a reboot, and at the latest
+  `quickUnlockMaxAgeDays` after the last one, the master password is needed again. With `quickUnlockAcrossRestarts` on, the user key is also kept on disk,
+  encrypted with a key only the device can derive, for `quickUnlockMaxAgeDays` (14) after the last master-password
+  unlock. Signing out of an account in the desktop app, or removing the app's data, removes its quick unlock.
 - **Windows Hello:** after the first master-password unlock Vaultbar creates its own Windows Hello key. Its signature
-  over a random challenge derives the AES-256-GCM key that encrypts the vault's user key on disk
-  (`%LOCALAPPDATA%\vaultbar\quick-unlock.dat`, wrapped once more with DPAPI). Unlocking needs your face, fingerprint or
-  PIN; if the stored key no longer matches the vault, Vaultbar deletes it and asks for the master password.
+  over a random challenge must reproduce a verifier bound to the account and the user key, and with persistence on it
+  derives the AES-256-GCM key for the copy on disk (`%LOCALAPPDATA%\vaultbar\quick-unlock.dat`, wrapped once more
+  with DPAPI). Unlocking needs your face, fingerprint or PIN; if the device key or the stored key no longer matches the
+  vault, Vaultbar deletes the enrollment and asks for the master password.
 - **Touch ID:** after the first master-password unlock Vaultbar creates a key in the Secure Enclave that only works after
-  Touch ID for the fingers enrolled at that moment. A key agreement with it derives the AES-256-GCM key that encrypts the
-  vault's user key on disk (`~/Library/Caches/vaultbar`, readable only by you). No Keychain item is created. Adding or
-  removing a finger voids the key, and Vaultbar then asks for the master password and offers to set it up again.
+  Touch ID for the fingers enrolled at that moment. A key agreement with it does what the Windows Hello signature does
+  (`~/Library/Caches/vaultbar`, readable only by you). No Keychain item is created. Adding or removing a finger voids
+  the key, and Vaultbar then asks for the master password and offers to set it up again.
 - Copied secrets are also cleared when Vaultbar locks, quits or crashes, even with `clipboardClearSeconds` at `0`.
   Copies stay out of clipboard history and off other devices where the system allows it: on Windows they skip clipboard history and cloud clipboard, on macOS they stay off
   Universal Clipboard and carry the concealed and transient markers clipboard managers honour, on KDE the password hint.

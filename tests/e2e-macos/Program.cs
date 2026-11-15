@@ -378,7 +378,7 @@ internal static class Program
         await UnlockAgainAsync();
         var prompts = device.Prompts;
         ClickTray(items, "Unlock with Touch ID");
-        Check("turning it on from the tray asks once and sets it up", await UntilAsync(() => vault.CanQuickUnlock) && device.Prompts == prompts + 1, $"prompts={device.Prompts - prompts}");
+        Check("turning it on from the tray asks once and sets it up", await UntilAsync(() => vault.QuickUnlockSetting == QuickUnlockSetting.On) && device.Prompts == prompts + 1, $"prompts={device.Prompts - prompts}");
 
         vault.Lock();
         Reopen();

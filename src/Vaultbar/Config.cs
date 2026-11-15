@@ -19,6 +19,12 @@ public sealed class Config
     public bool HideFromScreenCapture { get; set; } = true;
     public bool WindowsHello { get; set; } = true;
     public bool TouchId { get; set; } = true;
+
+    /// <summary>Keeps the quick-unlock key on disk so Windows Hello or Touch ID also opens the vault after a restart (VBR-25).</summary>
+    public bool QuickUnlockAcrossRestarts { get; set; }
+
+    /// <summary>How long after the last master-password unlock a key kept across restarts still opens the vault.</summary>
+    public int QuickUnlockMaxAgeDays { get; set; } = 14;
     public string? DataPath { get; set; }
 
     [JsonIgnore]
