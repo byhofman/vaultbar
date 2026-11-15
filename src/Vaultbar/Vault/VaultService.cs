@@ -377,7 +377,7 @@ public sealed class VaultService : IDisposable
             if (keepForQuickUnlock && _userKey is { } userKey && _snapshot is { } snapshot && QuickUnlock != null
                 && _quickStore.SettingFor(snapshot.UserId) == QuickUnlockSetting.On)
             {
-                var sealing = RandomNumberGenerator.GetBytes(32);
+                var sealing = LockedMemory.Adopt(RandomNumberGenerator.GetBytes(32));
                 var bytes = userKey.ToBytes();
                 try
                 {
