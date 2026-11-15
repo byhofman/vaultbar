@@ -33,7 +33,7 @@ internal static unsafe class MacBrowserAddress
     public static string? Read(int pid, bool knownBrowser = true) => Read(pid, knownBrowser, knownBrowser ? Budget : ProbeBudget);
 
     /// <param name="budget">Only a test passes its own, on a runner where each call into a browser is slow.</param>
-    internal static string? Read(int pid, bool knownBrowser, TimeSpan budget) => WithApp(pid, knownBrowser, app =>
+    internal static string? Read(int pid, bool knownBrowser, TimeSpan budget) => WithApp(pid, knownBrowser, budget, app =>
     {
         var started = DateTime.UtcNow;
         var deadline = started + budget;
@@ -78,7 +78,7 @@ internal static unsafe class MacBrowserAddress
         }
     }
 
-    private static T? WithApp<T>(int pid, bool askForWebTree, Func<nint, T?> read)
+    private static T? WithApp<T>(int pid, bool askForWebTree, TimeSpan budget, Func<nint, T?> read)
     {
         if (AXIsProcessTrusted() == 0) return default;
         var app = AXUIElementCreateApplication(pid);
@@ -86,7 +86,9 @@ internal static unsafe class MacBrowserAddress
         try
         {
             // A hung browser must not hold up the bar for the system's default of six seconds.
-            AXUIElementSetMessagingTimeout(app, 1f);
+            // Each call gets the whole budget: Chromium answers for its page from the renderer process, which can take
+            // more than a second, and a shorter limit cuts the page out of the tree. The read still ends at the budget.
+            AXUIElementSetMessagingTimeout(app, (float)budget.TotalSeconds);
             // Chromium browsers build their web accessibility tree only for assistive apps that ask for it this way. Asked
             // on every read: a browser that was asked before its window existed never builds it (seen on Chrome and Edge).
             if (askForWebTree) AXUIElementSetAttributeValue(app, ManualAccessibility, ObjC.Send(ObjC.Class("NSNumber"), ObjC.Sel("numberWithBool:"), 1));
