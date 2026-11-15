@@ -2,6 +2,21 @@
 
 Non-obvious choices a reader could not predict from the code. Newest first.
 
+## D-19 Touch ID moves into the keychain with the Developer ID; Windows keeps a residual — 2026-11-15
+
+M3: any process running as the user can load the Touch ID key blob from its file and ask for a touch with it, and can
+open the Windows Hello key by name. On macOS the fix needs a keychain access group, which only a Developer ID build with
+a provisioning profile can hold, so it is built and waits for VBR-8: the Swift library can keep a Secure Enclave key per
+account in the data-protection keychain (same key agreement, same 32 bytes per challenge), Vaultbar uses it whenever the
+running build holds an access group, deletes the old blob, and lets the next unlock set Touch ID up again; `package.sh`
+embeds `APPLE_PROVISIONING_PROFILE` and adds the access group only together with it, since the entitlement without the
+profile stops the app from launching. It has run only against a fake keychain: an ad-hoc build has no access group.
+Windows residual: since L4 each account has its own Hello key, created FailIfExists, but an unpackaged app has no
+identity Windows Hello can bind a key to, so another program running as the user can still open that key by name and
+raise a genuine Hello prompt for it. Whether an MSIX build scopes `KeyCredentialManager` keys to its package is not
+documented by Microsoft (searched 2026-11-15); it would need an MSIX build tried on a real Windows machine. The verifier
+(D-16) still means such a program cannot swap in a key of its own.
+
 ## D-18 Installers verify the signer once one exists, and the attestation until then — 2026-11-15
 
 The digest check proves integrity, not origin, because the digest comes from the same release (H2). The installers now
