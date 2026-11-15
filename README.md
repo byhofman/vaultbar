@@ -148,7 +148,7 @@ vaultbar shortcut     Linux/GNOME: bind the hotkey through GNOME settings
 | Setting | Default | |
 | --- | --- | --- |
 | `hotkey` | `Ctrl+Shift+Space` (`Cmd+Shift+Space` on macOS) | Modifiers `Ctrl`, `Shift`, `Alt`/`Option`, `Win`/`Super`/`Cmd` + `A`–`Z`, `0`–`9`, `F1`–`F24` (macOS `F1`–`F20`), `Space` |
-| `lockAfterMinutes` | `null` | Idle lock in minutes, counted while the bar is open too; `0` turns it off. `null` follows the Bitwarden desktop vault timeout: minutes as set, "Immediately" locks when the bar closes, "On system idle" after 5 minutes without input, "On system lock" and "On sleep" lock then; "On restart" and "Never" lock after 15 idle minutes |
+| `lockAfterMinutes` | `null` | Idle lock in minutes, counted while the bar is open too; `0` turns every automatic lock off, the Bitwarden timeout included. `null` follows the Bitwarden desktop vault timeout: minutes as set, "Immediately" locks when the bar closes, "On system idle" after 5 minutes without input, "On system lock" and "On sleep" lock then (both also after 15 idle minutes); "On restart" and "Never" lock after 15 idle minutes |
 | `lockOnSystemLock` | `true` | Lock when the session locks or the machine sleeps |
 | `clipboardClearSeconds` | `30` | `0` disables clearing |
 | `autotypeSequence` | `{USERNAME}{TAB}{PASSWORD}` | Tokens: `{USERNAME}` `{PASSWORD}` `{TOTP}` `{TAB}` `{ENTER}` `{DELAY:ms}`. Without a username, the following `{TAB}` is skipped |
@@ -222,6 +222,8 @@ vaultbar shortcut     Linux/GNOME: bind the hotkey through GNOME settings
 - **No Linux biometrics yet.** Windows Hello and Touch ID are Vaultbar's own (see above); the desktop app's biometric
   unlock is bound to that app and cannot be shared.
 - Screen-capture hiding is not available on Linux.
+- Firefox on macOS does not give Vaultbar a page address it can trust, so it gets no suggestions and every fill into it
+  asks for a second Enter. Firefox on Windows works.
 - Linux: browser addresses are not read yet, so a browser gets no suggestions and every fill into it asks for a second Enter.
 - Linux, Wayland: auto-type cannot check which window has focus, so it types into whatever has it after the bar closes.
 - Accounts without a master password (SSO with trusted devices or key connector) are not supported.

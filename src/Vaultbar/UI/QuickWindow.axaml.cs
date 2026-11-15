@@ -34,7 +34,8 @@ public partial class QuickWindow : Window
     private readonly DispatcherTimer _footerTimer = new() { Interval = TimeSpan.FromSeconds(3) };
 
     private ForeignWindow? _target;
-    private string? _fillConfirmedFor;
+    // The item and the host the user was shown: a second Enter fills only if the page is still on that host.
+    private (string ItemId, string? Page)? _fillConfirmedFor;
     private Mode _mode;
     private Mode _modeBeforeReprompt;
     private Mode _modeBeforeHelp;
@@ -626,10 +627,10 @@ public partial class QuickWindow : Window
         if (_target is { IsBrowser: true })
         {
             _target = _target with { Address = _app.Platform.BrowserAddress(_target) };
-            if (Matcher.FillNeedsConfirmation(item, _target, _app.Vault.UriMatch) && _fillConfirmedFor != item.Id)
+            var page = _target.Address is { } address ? UriRules.HostOf(address) ?? address : null;
+            if (Matcher.FillNeedsConfirmation(item, _target, _app.Vault.UriMatch) && _fillConfirmedFor != (item.Id, page))
             {
-                _fillConfirmedFor = item.Id;
-                var page = _target.Address is { } address ? UriRules.HostOf(address) ?? address : null;
+                _fillConfirmedFor = (item.Id, page);
                 Toast(page is null
                     ? $"Can't read the address in {_target.App} · Enter again to fill anyway"
                     : $"{page} is not a website of this item · Enter again to fill there", sticky: true);

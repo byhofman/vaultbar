@@ -86,8 +86,11 @@ internal sealed class WindowsPlatform : IPlatform
         {
             app = "";
         }
-        var browser = Browsers.IsBrowserApp(app);
-        return new ForeignWindow(hwnd, title, app, (int)pid) { IsBrowser = browser, Address = browser ? WindowsBrowserAddress.Read(hwnd) : null };
+        var known = Browsers.IsBrowserApp(app);
+        var address = WindowsBrowserAddress.Read(hwnd, known);
+        // An app not on the list that shows a web page is treated as the browser it is.
+        var browser = known || Browsers.IsWebAddress(address);
+        return new ForeignWindow(hwnd, title, app, (int)pid) { IsBrowser = browser, Address = browser ? address : null, KnownBrowser = known };
     }
 
     public TimeSpan? SystemIdleTime()
@@ -97,7 +100,7 @@ internal sealed class WindowsPlatform : IPlatform
         return Native.GetLastInputInfo(ref info) != 0 ? TimeSpan.FromMilliseconds(unchecked((uint)Environment.TickCount - info.dwTime)) : null;
     }
 
-    public string? BrowserAddress(ForeignWindow browser) => WindowsBrowserAddress.Read(browser.Handle);
+    public string? BrowserAddress(ForeignWindow browser) => WindowsBrowserAddress.Read(browser.Handle, Browsers.IsBrowserApp(browser.App));
 
     private static readonly string[] ShellClasses =
     [

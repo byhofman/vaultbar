@@ -22,9 +22,11 @@ public sealed record LockPolicy(TimeSpan? IdleAfter, bool OnBarHidden = false, b
 
         return bitwardenTimeout?.Trim() switch
         {
-            "0" => new LockPolicy(null, OnBarHidden: true),
+            // The idle fallback stays as a backstop: the vault can be unlocked while the bar is hidden, and on Linux the
+            // session-lock signals are missing where no logind or screensaver is on D-Bus.
+            "0" => new LockPolicy(Fallback, OnBarHidden: true),
             "onIdle" or "-4" => new LockPolicy(null, OnSystemIdle: true),
-            "onSleep" or "-3" or "onLocked" or "-2" => new LockPolicy(null, OnSystemLock: true),
+            "onSleep" or "-3" or "onLocked" or "-2" => new LockPolicy(Fallback, OnSystemLock: true),
             { } n when int.TryParse(n, out var m) && m > 0 => new LockPolicy(TimeSpan.FromMinutes(m)),
             _ => new LockPolicy(Fallback),
         };
