@@ -22,9 +22,14 @@ jobs:
           dotnet-version: '10.0.x'
 
       - name: Test
+        run: dotnet test vaultbar.slnx -c Release -p:RestoreLockedMode=true --blame-hang-timeout 10m
+
+      # Opens Safari, Chrome and Edge on the throwaway runner; a step of its own, so a stuck browser cannot hide the rest.
+      - name: Browser addresses
+        timeout-minutes: 12
         env:
           VAULTBAR_BROWSER_TESTS: '1'
-        run: dotnet test vaultbar.slnx -c Release -p:RestoreLockedMode=true
+        run: dotnet test tests/Vaultbar.Tests -c Release -p:RestoreLockedMode=true --no-build --filter "FullyQualifiedName~BrowserAddressTests" --blame-hang-timeout 4m --logger "console;verbosity=normal"
 
       - name: End to end
         env:
@@ -82,7 +87,7 @@ jobs:
           dotnet-version: '10.0.x'
 
       - name: Test
-        run: dotnet test vaultbar.slnx -c Release -p:RestoreLockedMode=true
+        run: dotnet test vaultbar.slnx -c Release -p:RestoreLockedMode=true --blame-hang-timeout 10m
 
       - name: Build
         shell: pwsh
@@ -128,7 +133,7 @@ jobs:
       - name: Test
         env:
           VAULTBAR_BROWSER_TESTS: '1'
-        run: dotnet test vaultbar.slnx -c Release -p:RestoreLockedMode=true
+        run: dotnet test vaultbar.slnx -c Release -p:RestoreLockedMode=true --blame-hang-timeout 10m
 
       # Against the published release, so the digest check runs on what GitHub records for a real asset.
       - name: Installer
