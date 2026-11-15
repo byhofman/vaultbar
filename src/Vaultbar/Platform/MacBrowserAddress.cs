@@ -45,7 +45,9 @@ internal static unsafe class MacBrowserAddress
             var scan = Scan(app, deadline);
             LastAttempt = scan is null ? "no window" : $"{scan.Visited} elements, complete={scan.Complete}, visible: {scan.Visible.Count}";
             if (scan is { Complete: true } && scan.Visible is [{ Length: > 0 } address]) return address;
-            Thread.Sleep(80);
+            // Backing off gives the browser's main thread room to build the page tree; asked without a pause, a slow
+            // Chromium never gets to it.
+            Thread.Sleep(Math.Min(250 * attempts, 1000));
         }
         LastAttempt += $"; {attempts} attempts in {(DateTime.UtcNow - started).TotalSeconds:0.0} s";
         return null;
