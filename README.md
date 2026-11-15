@@ -179,11 +179,12 @@ vaultbar shortcut     Linux/GNOME: bind the hotkey through GNOME settings
   screen locker over D-Bus, `loginctl lock-session` and suspend). Locking also lets go of every item the bar was showing.
 - Re-prompt items require Windows Hello, Touch ID or the master password again. A password only counts if it unwraps the key the
   vault is unlocked with.
-- **Quick unlock lasts until Vaultbar quits.** While it runs, locking keeps the vault's user key in memory, encrypted
-  under a random key that never leaves memory, and Windows Hello or Touch ID opens it again. After a restart or a
-  reboot the master password is needed once. With `quickUnlockAcrossRestarts` on, the user key is also kept on disk,
+- **Quick unlock lasts until Vaultbar quits.** While it runs, locking keeps the vault's user key in memory, sealed
+  under a random key held next to it, and Windows Hello or Touch ID opens it again; a memory dump taken while locked
+  could recover it, as with Bitwarden's own in-memory biometric unlock. After a restart or a reboot, and at the latest
+  `quickUnlockMaxAgeDays` after the last one, the master password is needed again. With `quickUnlockAcrossRestarts` on, the user key is also kept on disk,
   encrypted with a key only the device can derive, for `quickUnlockMaxAgeDays` (14) after the last master-password
-  unlock. Signing out of an account in the desktop app removes its quick unlock.
+  unlock. Signing out of an account in the desktop app, or removing the app's data, removes its quick unlock.
 - **Windows Hello:** after the first master-password unlock Vaultbar creates its own Windows Hello key. Its signature
   over a random challenge must reproduce a verifier bound to the account and the user key, and with persistence on it
   derives the AES-256-GCM key for the copy on disk (`%LOCALAPPDATA%\vaultbar\quick-unlock.dat`, wrapped once more
