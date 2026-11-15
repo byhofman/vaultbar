@@ -198,6 +198,9 @@ vaultbar shortcut     Linux/GNOME: bind the hotkey through GNOME settings
   Touch ID for the fingers enrolled at that moment. A key agreement with it does what the Windows Hello signature does
   (`~/Library/Caches/vaultbar`, readable only by you). No Keychain item is created. Adding or removing a finger voids
   the key, and Vaultbar then asks for the master password and offers to set it up again.
+- **Same-user programs:** in today's unsigned builds another program running as you can use the Touch ID key file,
+  or open the Windows Hello key, and raise a real prompt for it. It still cannot open the vault without your touch or
+  PIN. A Developer ID build keeps the Touch ID key in the keychain, where only Vaultbar can use it.
 - Copied secrets are also cleared when Vaultbar locks, quits or crashes, even with `clipboardClearSeconds` at `0`.
   Copies stay out of clipboard history and off other devices where the system allows it: on Windows they skip clipboard history and cloud clipboard, on macOS they stay off
   Universal Clipboard and carry the concealed and transient markers clipboard managers honour, on KDE the password hint.

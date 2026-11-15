@@ -162,4 +162,61 @@ public sealed class TouchIdTests : IDisposable
         Assert.False(File.Exists(KeyPath));
         Assert.Equal(QuickUnlockSetting.Off, vault.QuickUnlockSetting);
     }
+
+    /// <summary>A signed build with a keychain access group: the key lives under a per-account tag in the keychain.</summary>
+    private sealed class FakeKeychainEnclave : ITouchIdDevice
+    {
+        public readonly Dictionary<string, byte[]> Keys = new();
+
+        public bool Available => true;
+        public bool KeychainAvailable => true;
+
+        public int Create(out byte[] blob) => throw new InvalidOperationException("a signed build never writes a key blob");
+
+        public int Derive(byte[] blob, byte[] challenge, string reason, out byte[] secret) =>
+            throw new InvalidOperationException("a signed build never loads a key blob");
+
+        public int CreateInKeychain(string tag)
+        {
+            Keys[tag] = RandomNumberGenerator.GetBytes(32);
+            return 0;
+        }
+
+        public int DeriveFromKeychain(string tag, byte[] challenge, string reason, out byte[] secret)
+        {
+            secret = Keys.TryGetValue(tag, out var key) ? HMACSHA256.HashData(key, challenge) : [];
+            return secret.Length > 0 ? 0 : -25300;
+        }
+
+        public void DeleteFromKeychain(string tag) => Keys.Remove(tag);
+    }
+
+    [MacFact]
+    public async Task SignedBuild_KeepsAPerAccountKeyInTheKeychain_AndDropsTheOldBlob()
+    {
+        Directory.CreateDirectory(_dir);
+        File.WriteAllBytes(KeyPath, RandomNumberGenerator.GetBytes(64));
+        var keychain = new FakeKeychainEnclave();
+        VaultFixture.Demo().Write(DataPath, "correct horse");
+        using var vault = new VaultService(new Config { DataPath = DataPath }, StorePath) { QuickUnlock = new MacTouchId(keychain, KeyPath) };
+        vault.Probe();
+        Assert.Null(await vault.UnlockAsync("correct horse"));
+
+        Assert.Equal(QuickUnlockStatus.Success, await vault.SetUpQuickUnlockAsync());
+        Assert.False(File.Exists(KeyPath));
+        Assert.Equal([MacTouchId.KeychainTag(VaultFixture.UserId)], keychain.Keys.Keys);
+        Assert.NotEqual(MacTouchId.KeychainTag(VaultFixture.UserId), MacTouchId.KeychainTag("0f9e8d7c-0000-4000-8000-000000000002"));
+
+        vault.Lock();
+        Assert.Equal(QuickUnlockStatus.Success, (await vault.QuickUnlockAsync()).Status);
+
+        await vault.SetQuickUnlockEnabledAsync(false);
+        Assert.Empty(keychain.Keys);
+    }
+
+    [MacFact]
+    public void UnsignedBuild_HasNoKeychainAccessGroup()
+    {
+        Assert.False(new NativeTouchId().KeychainAvailable);
+    }
 }

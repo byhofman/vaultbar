@@ -5,7 +5,10 @@ namespace Vaultbar.Platform;
 
 /// <summary>
 /// The "signature" is a key agreement inside the Secure Enclave. It is deterministic like a Windows Hello signature, and
-/// the enclave refuses it without Touch ID. The file holds only a key blob that is useless outside this Mac's enclave.
+/// the enclave refuses it without Touch ID. In an unsigned build the file holds a key blob that is useless outside this
+/// Mac's enclave, but any process running as the user can load it there (M3). A Developer ID build with a keychain access
+/// group keeps one key per account in the data-protection keychain instead, which only Vaultbar's signature can use;
+/// the blob of an earlier enrollment is then deleted, and the next unlock sets Touch ID up again.
 /// </summary>
 [SupportedOSPlatform("macos")]
 public sealed class MacTouchId(ITouchIdDevice device, string keyPath) : IQuickUnlockProvider
@@ -23,6 +26,8 @@ public sealed class MacTouchId(ITouchIdDevice device, string keyPath) : IQuickUn
             {
                 // With the lid closed Touch ID is off for now, which must not cost the enrollment; Canceled keeps it.
                 if (!device.Available) return (createKey ? QuickUnlockStatus.Unavailable : QuickUnlockStatus.Canceled, null);
+
+                if (device.KeychainAvailable) return Keychain(account, challenge, createKey);
 
                 if (createKey)
                 {
@@ -48,8 +53,27 @@ public sealed class MacTouchId(ITouchIdDevice device, string keyPath) : IQuickUn
             }
         });
 
+    internal static string KeychainTag(string account) =>
+        "dev.byhofman.vaultbar.quick-unlock." + Convert.ToHexStringLower(System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(account)))[..16];
+
+    private (QuickUnlockStatus, byte[]?) Keychain(string account, byte[] challenge, bool createKey)
+    {
+        if (File.Exists(keyPath)) File.Delete(keyPath);
+        var tag = KeychainTag(account);
+        if (createKey && device.CreateInKeychain(tag) is var created and not 0)
+        {
+            Log.Write($"touch id: keychain create failed ({created})");
+            return (Classify(created), null);
+        }
+        var result = device.DeriveFromKeychain(tag, challenge, Reason, out var secret);
+        if (result == 0) return (QuickUnlockStatus.Success, secret);
+        Log.Write($"touch id: keychain derive failed ({result})");
+        return (Classify(result), null);
+    }
+
     public Task DeleteKeyAsync(string account)
     {
+        if (device.KeychainAvailable) device.DeleteFromKeychain(KeychainTag(account));
         try
         {
             File.Delete(keyPath);

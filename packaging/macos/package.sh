@@ -2,7 +2,9 @@
 # Turns dist/vaultbar-<rid>.tar.gz into dist/vaultbar-<rid>.dmg.
 # With the APPLE_* variables set it signs with Developer ID, notarizes and staples both the app and the dmg, and rewrites
 # the tar.gz so the one-liner gets the signed app too. Without them it signs ad hoc, and a browser download needs
-# Open Anyway once.
+# Open Anyway once. With APPLE_PROVISIONING_PROFILE (a base64 Developer ID provisioning profile for
+# dev.byhofman.vaultbar with a keychain access group) as well, the app also gets that access group, which moves the
+# Touch ID key into the data-protection keychain (VBR-26).
 # Usage: package.sh <dist folder> <rid>...
 set -euo pipefail
 dist=${1:A}; shift
@@ -47,7 +49,18 @@ sign_app() {
   for file in "$app"/Contents/MacOS/*.dylib(N); do
     codesign --force --timestamp --options runtime --sign "$APPLE_SIGNING_IDENTITY" "$file"
   done
-  codesign --force --timestamp --options runtime --entitlements "$here/Vaultbar.entitlements" --sign "$APPLE_SIGNING_IDENTITY" "$app"
+  local entitlements=$here/Vaultbar.entitlements
+  if [[ -n ${APPLE_PROVISIONING_PROFILE:-} ]]; then
+    print -r -- "$APPLE_PROVISIONING_PROFILE" | base64 --decode > "$app/Contents/embedded.provisionprofile"
+    # Without the matching profile these entitlements stop the app from launching, so they exist only together.
+    entitlements=$work/entitlements.plist
+    cp "$here/Vaultbar.entitlements" "$entitlements"
+    local id="$APPLE_TEAM_ID.dev.byhofman.vaultbar"
+    /usr/libexec/PlistBuddy -c "Add :com.apple.application-identifier string $id" \
+      -c "Add :com.apple.developer.team-identifier string $APPLE_TEAM_ID" \
+      -c "Add :keychain-access-groups array" -c "Add :keychain-access-groups:0 string $id" "$entitlements"
+  fi
+  codesign --force --timestamp --options runtime --entitlements "$entitlements" --sign "$APPLE_SIGNING_IDENTITY" "$app"
 }
 
 for rid in "$@"; do

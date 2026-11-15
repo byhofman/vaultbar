@@ -13,6 +13,13 @@ internal sealed partial class NativeTouchId : ITouchIdDevice
     [LibraryImport(Lib)] private static partial int vaultbar_touchid_available();
     [LibraryImport(Lib)] private static partial int vaultbar_touchid_create([Out] byte[] blob, int capacity, out int written);
 
+    [LibraryImport(Lib)] private static partial int vaultbar_touchid_keychain_available();
+    [LibraryImport(Lib, StringMarshalling = StringMarshalling.Utf8)] private static partial int vaultbar_touchid_keychain_create(string tag);
+    [LibraryImport(Lib, StringMarshalling = StringMarshalling.Utf8)] private static partial int vaultbar_touchid_keychain_delete(string tag);
+
+    [LibraryImport(Lib, StringMarshalling = StringMarshalling.Utf8)]
+    private static partial int vaultbar_touchid_keychain_derive(string tag, byte[] challenge, int challengeLength, string reason, int noPrompt, [Out] byte[] secret);
+
     [LibraryImport(Lib, StringMarshalling = StringMarshalling.Utf8)]
     private static partial int vaultbar_touchid_derive(byte[] blob, int blobLength, byte[] challenge, int challengeLength, string reason, int noPrompt, [Out] byte[] secret);
 
@@ -30,6 +37,34 @@ internal sealed partial class NativeTouchId : ITouchIdDevice
             }
         }
     }
+
+    public bool KeychainAvailable
+    {
+        get
+        {
+            try
+            {
+                return vaultbar_touchid_keychain_available() != 0;
+            }
+            catch (Exception ex) when (ex is DllNotFoundException or EntryPointNotFoundException)
+            {
+                return false;
+            }
+        }
+    }
+
+    public int CreateInKeychain(string tag) => vaultbar_touchid_keychain_create(tag);
+
+    public int DeriveFromKeychain(string tag, byte[] challenge, string reason, out byte[] secret)
+    {
+        var buffer = new byte[32];
+        var status = vaultbar_touchid_keychain_derive(tag, challenge, challenge.Length, reason, 0, buffer);
+        secret = status == 0 ? buffer : [];
+        if (status != 0) CryptographicOperations.ZeroMemory(buffer);
+        return status;
+    }
+
+    public void DeleteFromKeychain(string tag) => vaultbar_touchid_keychain_delete(tag);
 
     public int Create(out byte[] blob)
     {
