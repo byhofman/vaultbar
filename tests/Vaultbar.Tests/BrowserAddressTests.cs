@@ -172,7 +172,9 @@ public sealed class BrowserAddressTests : IDisposable
                 // bar would; what is tested is which address is read, not how fast.
                 if (pid != 0) address = MacBrowserAddress.Read(pid, knownBrowser: true, TimeSpan.FromSeconds(15));
             }
-            Assert.True(expected == address, $"read {address ?? "nothing"} ({MacBrowserAddress.LastAttempt}); {(pid == 0 ? "no process" : MacBrowserAddress.Describe(pid))}; processes: {string.Join(", ", Process.GetProcesses().Where(p => p.ProcessName.Contains(process, StringComparison.OrdinalIgnoreCase)).Select(p => $"{p.ProcessName} {p.Id}"))}; windows: {Run("/bin/sh", "-c", $"osascript -e 'tell application \"System Events\" to get name of every window of (every process whose unix id is {pid})' 2>&1; ps -o stat=,etime= -p {pid}")}");
+            var described = pid == 0 ? "no process" : MacBrowserAddress.Describe(pid);
+            var afterDescribe = pid == 0 ? null : MacBrowserAddress.Read(pid, knownBrowser: true, TimeSpan.FromSeconds(15));
+            Assert.True(expected == address, $"read {address ?? "nothing"} ({MacBrowserAddress.LastAttempt}); read after describing: {afterDescribe ?? "nothing"}; {described}; processes: {string.Join(", ", Process.GetProcesses().Where(p => p.ProcessName.Contains(process, StringComparison.OrdinalIgnoreCase)).Select(p => $"{p.ProcessName} {p.Id}"))}; windows: {Run("/bin/sh", "-c", $"osascript -e 'tell application \"System Events\" to get name of every window of (every process whose unix id is {pid})' 2>&1; ps -o stat=,etime= -p {pid}")}");
         }
         finally
         {
