@@ -167,7 +167,7 @@ public sealed class BrowserAddressTests : IDisposable
             for (var i = 0; i < 8 && address != expected; i++)
             {
                 await Task.Delay(500);
-                pid = Process.GetProcessesByName(process).Where(p => p.StartTime >= started).OrderBy(p => p.StartTime).Select(p => p.Id).FirstOrDefault();
+                pid = Process.GetProcessesByName(process).Select(p => (p.Id, Start: StartOf(p))).Where(p => p.Start >= started).OrderBy(p => p.Start).Select(p => p.Id).FirstOrDefault();
                 // The hosted runner answers each accessibility call slowly, so this gives the read more time than the
                 // bar would; what is tested is which address is read, not how fast.
                 if (pid != 0) address = MacBrowserAddress.Read(pid, knownBrowser: true, TimeSpan.FromSeconds(15));
@@ -188,6 +188,19 @@ public sealed class BrowserAddressTests : IDisposable
                 {
                 }
             }
+        }
+    }
+
+    /// <summary>A helper process can exit between the listing and the question, which throws.</summary>
+    private static DateTime StartOf(Process p)
+    {
+        try
+        {
+            return p.StartTime;
+        }
+        catch (Exception ex) when (ex is InvalidOperationException or System.ComponentModel.Win32Exception)
+        {
+            return DateTime.MinValue;
         }
     }
 
