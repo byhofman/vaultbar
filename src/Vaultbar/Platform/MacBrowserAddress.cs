@@ -19,6 +19,7 @@ internal static unsafe class MacBrowserAddress
     private const int MaxElements = 1500, KAxValueCgSizeType = 2;
 
     private static readonly nint Children = Retained("AXChildren"), Role = Retained("AXRole"), Url = Retained("AXURL");
+    private static readonly nint FocusedElement = Retained("AXFocusedUIElement"), Parent = Retained("AXParent"), Windows = Retained("AXWindows");
     private static readonly nint Size = Retained("AXSize"), FocusedWindow = Retained("AXFocusedWindow"), MainWindow = Retained("AXMainWindow");
     private static readonly nint WebArea = Retained("AXWebArea"), ManualAccessibility = Retained("AXManualAccessibility");
 
@@ -27,19 +28,33 @@ internal static unsafe class MacBrowserAddress
     private static readonly TimeSpan Budget = TimeSpan.FromSeconds(3);
 
     private static readonly TimeSpan ProbeBudget = TimeSpan.FromMilliseconds(300);
-    private static readonly HashSet<int> AskedForWebTree = [];
 
     /// <param name="knownBrowser">False for any other app: one quick look, to catch browsers and web views not on the list.</param>
-    public static string? Read(int pid, bool knownBrowser = true) => WithApp(pid, knownBrowser, app =>
+    public static string? Read(int pid, bool knownBrowser = true) => Read(pid, knownBrowser, knownBrowser ? Budget : ProbeBudget);
+
+    /// <param name="budget">Only a test passes its own, on a runner where each call into a browser is slow.</param>
+    internal static string? Read(int pid, bool knownBrowser, TimeSpan budget) => WithApp(pid, knownBrowser, budget, app =>
     {
-        var deadline = DateTime.UtcNow + (knownBrowser ? Budget : ProbeBudget);
+        var started = DateTime.UtcNow;
+        var deadline = started + budget;
+        var attempts = 0;
         while (DateTime.UtcNow < deadline)
         {
-            if (Scan(app, deadline) is { Complete: true } scan && scan.Visible is [{ Length: > 0 } address]) return address;
-            Thread.Sleep(80);
+            attempts++;
+            if (FocusedPage(app) is { Length: > 0 } focused) return focused;
+            var scan = Scan(app, deadline);
+            LastAttempt = scan is null ? "no window" : $"{scan.Visited} elements, complete={scan.Complete}, visible: {scan.Visible.Count}";
+            if (scan is { Complete: true } && scan.Visible is [{ Length: > 0 } address]) return address;
+            // Backing off gives the browser's main thread room to build the page tree; asked without a pause, a slow
+            // Chromium never gets to it.
+            Thread.Sleep(Math.Min(250 * attempts, 1000));
         }
+        LastAttempt += $"; {attempts} attempts in {(DateTime.UtcNow - started).TotalSeconds:0.0} s";
         return null;
     });
+
+    /// <summary>What the last read that found nothing saw, for a test to report.</summary>
+    internal static string? LastAttempt { get; private set; }
 
     /// <summary>What a read finds, for a test to say why it found no address.</summary>
     internal static string Describe(int pid)
@@ -65,7 +80,7 @@ internal static unsafe class MacBrowserAddress
         }
     }
 
-    private static T? WithApp<T>(int pid, bool askForWebTree, Func<nint, T?> read)
+    private static T? WithApp<T>(int pid, bool askForWebTree, TimeSpan budget, Func<nint, T?> read)
     {
         if (AXIsProcessTrusted() == 0) return default;
         var app = AXUIElementCreateApplication(pid);
@@ -73,17 +88,56 @@ internal static unsafe class MacBrowserAddress
         try
         {
             // A hung browser must not hold up the bar for the system's default of six seconds.
-            AXUIElementSetMessagingTimeout(app, 1f);
+            // Each call gets the whole budget: Chromium answers for its page from the renderer process, which can take
+            // more than a second, and a shorter limit cuts the page out of the tree. The read still ends at the budget.
+            AXUIElementSetMessagingTimeout(app, (float)budget.TotalSeconds);
             // Chromium browsers build their web accessibility tree only for assistive apps that ask for it this way. Asked
-            // once per process: it stays on, and asking again would only rebuild it.
-            bool ask;
-            lock (AskedForWebTree) ask = askForWebTree && AskedForWebTree.Add(pid);
-            if (ask) AXUIElementSetAttributeValue(app, ManualAccessibility, ObjC.Send(ObjC.Class("NSNumber"), ObjC.Sel("numberWithBool:"), 1));
+            // on every read: a browser that was asked before its window existed never builds it (seen on Chrome and Edge).
+            if (askForWebTree)
+            {
+                // Newer Chromium answers AXManualAccessibility with "unsupported" and turns its page tree on when an
+                // assistive app asks the application for its role, windows and focused window first, as screen readers
+                // do. In that order the page appeared on the CI runner; with the request alone it never did.
+                foreach (var attribute in new[] { Role, Windows, FocusedWindow })
+                    if (AXUIElementCopyAttributeValue(app, attribute, out var value) == 0 && value != 0) CFRelease(value);
+                AXUIElementSetAttributeValue(app, ManualAccessibility, ObjC.Send(ObjC.Class("NSNumber"), ObjC.Sel("numberWithBool:"), 1));
+            }
             return read(app);
         }
         finally
         {
             CFRelease(app);
+        }
+    }
+
+    /// <summary>
+    /// The page that holds the keyboard focus, found by walking up from the focused element: a few calls instead of a walk
+    /// of the whole window, and exactly the page the keystrokes will go to. The outermost web area counts, so a frame
+    /// inside the page never does. Null when the focus is outside any page, such as in the address bar.
+    /// </summary>
+    private static string? FocusedPage(nint app)
+    {
+        if (AXUIElementCopyAttributeValue(app, FocusedElement, out var element) != 0 || element == 0) return null;
+        nint outermost = 0;
+        try
+        {
+            for (var depth = 0; depth < 100 && element != 0; depth++)
+            {
+                if (IsWebArea(element))
+                {
+                    if (outermost != 0) CFRelease(outermost);
+                    outermost = CFRetain(element);
+                }
+                var next = AXUIElementCopyAttributeValue(element, Parent, out var parent) == 0 ? parent : 0;
+                CFRelease(element);
+                element = next;
+            }
+            return outermost != 0 && IsVisible(outermost) ? UrlOf(outermost) : null;
+        }
+        finally
+        {
+            if (element != 0) CFRelease(element);
+            if (outermost != 0) CFRelease(outermost);
         }
     }
 
