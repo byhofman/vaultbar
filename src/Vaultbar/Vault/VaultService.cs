@@ -162,7 +162,7 @@ public sealed class VaultService : IDisposable
             lock (_gate) session = SessionFor(snapshot.UserId) ? new Session(_session!.UserId, _session.Key.ToArray(), _session.Sealed) : null;
             if (session is null && entry.WrappedKey is null) return (QuickUnlockStatus.Unavailable, null);
 
-            var (status, signature) = await provider.SignAsync(entry.Challenge, createKey: false);
+            var (status, signature) = await provider.SignAsync(entry.UserId, entry.Challenge, createKey: false);
             if (status == QuickUnlockStatus.Unavailable) ForgetQuickUnlock();
             if (status != QuickUnlockStatus.Success || signature is null) return (status, null);
 
@@ -223,7 +223,7 @@ public sealed class VaultService : IDisposable
         try
         {
             var challenge = RandomNumberGenerator.GetBytes(32);
-            var (status, signature) = await provider.SignAsync(challenge, createKey: true);
+            var (status, signature) = await provider.SignAsync(snapshot.UserId, challenge, createKey: true);
             if (status == QuickUnlockStatus.Canceled) _quickStore.SaveDeclined(snapshot.UserId);
             if (status != QuickUnlockStatus.Success || signature is null) return status;
             try
@@ -257,7 +257,7 @@ public sealed class VaultService : IDisposable
         var snapshot = _snapshot;
         if (provider is null || snapshot is null || State != VaultState.Unlocked || _quickStore.Load(snapshot.UserId, KeepKeyUntil, Latest) is not { } entry)
             return QuickUnlockStatus.Unavailable;
-        var (status, signature) = await provider.SignAsync(entry.Challenge, createKey: false);
+        var (status, signature) = await provider.SignAsync(entry.UserId, entry.Challenge, createKey: false);
         if (status != QuickUnlockStatus.Success || signature is null) return status;
         byte[] userKey;
         lock (_gate)
@@ -287,7 +287,7 @@ public sealed class VaultService : IDisposable
         }
         ForgetQuickUnlock();
         _quickStore.SaveDeclined(snapshot.UserId);
-        await provider.DeleteKeyAsync();
+        await provider.DeleteKeyAsync(snapshot.UserId);
     }
 
     private static byte[]? UnwrapWithPassword(string password, StoreSnapshot snapshot)
@@ -377,7 +377,7 @@ public sealed class VaultService : IDisposable
             if (keepForQuickUnlock && _userKey is { } userKey && _snapshot is { } snapshot && QuickUnlock != null
                 && _quickStore.SettingFor(snapshot.UserId) == QuickUnlockSetting.On)
             {
-                var sealing = RandomNumberGenerator.GetBytes(32);
+                var sealing = LockedMemory.Adopt(RandomNumberGenerator.GetBytes(32));
                 var bytes = userKey.ToBytes();
                 try
                 {

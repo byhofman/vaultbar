@@ -5,16 +5,46 @@ namespace Vaultbar;
 /// <summary>
 /// Single-instance channel: a second launch forwards its command to the running instance. Both ends refuse a peer
 /// running as another user. On macOS and Linux the socket sits in a folder only the user can open, so another user
-/// can neither reach it nor take its name first.
+/// can neither reach it nor take its name first. Windows pipe names are machine-wide, so there the name carries a random
+/// part kept in the user's own folder: another user cannot guess it to take it first (L5).
 /// </summary>
 public static class Ipc
 {
     internal static string Endpoint { get; } = OperatingSystem.IsWindows()
-        ? "vaultbar-" + new string(Environment.UserName.Where(char.IsAsciiLetterOrDigit).ToArray())
-          + (Environment.GetEnvironmentVariable("VAULTBAR_CONFIG_DIR") is { Length: > 0 } d
-              ? "-" + Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(d)))[..8]
-              : "")
+        ? "vaultbar-" + PipeSecret(Path.Combine(Paths.EnsurePrivate(Paths.CacheDir), "pipe-name"))
         : Path.Combine(Paths.RuntimeDir, "vaultbar.sock");
+
+    /// <summary>The random part of the pipe name: made once, then read by every launch, whichever starts first.</summary>
+    internal static string PipeSecret(string file)
+    {
+        for (var attempt = 0; ; attempt++)
+        {
+            try
+            {
+                if (File.Exists(file))
+                {
+                    if (File.ReadAllText(file).Trim() is { Length: 32 } existing && existing.All(char.IsAsciiHexDigitLower)) return existing;
+                    File.Delete(file);
+                }
+                var fresh = Convert.ToHexStringLower(System.Security.Cryptography.RandomNumberGenerator.GetBytes(16));
+                var temp = file + "." + fresh;
+                File.WriteAllText(temp, fresh);
+                try
+                {
+                    // Never overwrites: of two launches making a name at once, the first move wins and the loop reads it.
+                    File.Move(temp, file, overwrite: false);
+                }
+                catch (IOException)
+                {
+                    File.Delete(temp);
+                }
+            }
+            catch (IOException) when (attempt < 5)
+            {
+                Thread.Sleep(50);
+            }
+        }
+    }
 
     public static bool TrySend(string command, int timeoutMs = 500)
     {

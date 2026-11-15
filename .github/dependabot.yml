@@ -20,3 +20,8 @@ updates:
     groups:
       actions:
         patterns: ['*']
+
+  - package-ecosystem: dotnet-sdk
+    directory: /
+    schedule:
+      interval: weekly

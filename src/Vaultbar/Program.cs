@@ -77,6 +77,7 @@ internal static class Program
             return Ipc.TrySend(show ? "show" : "ping") ? 0 : 1;
         }
 
+        CrashDumps.Exclude();
         App.ShowOnStart = show;
         BuildAvaloniaApp().StartWithClassicDesktopLifetime([], Avalonia.Controls.ShutdownMode.OnExplicitShutdown);
         return 0;

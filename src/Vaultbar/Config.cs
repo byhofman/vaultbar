@@ -20,6 +20,12 @@ public sealed class Config
     public bool WindowsHello { get; set; } = true;
     public bool TouchId { get; set; } = true;
 
+    /// <summary>
+    /// Lets Windows Hello or Touch ID confirm items with master password re-prompt. Off, as in Bitwarden, which asks for
+    /// the master password: re-prompt exists to ask for more than what unlocked the vault (L3).
+    /// </summary>
+    public bool RepromptWithQuickUnlock { get; set; }
+
     /// <summary>Keeps the quick-unlock key on disk so Windows Hello or Touch ID also opens the vault after a restart (VBR-25).</summary>
     public bool QuickUnlockAcrossRestarts { get; set; }
 

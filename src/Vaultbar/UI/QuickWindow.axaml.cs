@@ -535,7 +535,7 @@ public partial class QuickWindow : Window
         }
 
         // Enrolled is enough: the check signs the challenge and verifies it against the open key, needing nothing stored.
-        if (_app.Vault.QuickUnlockSetting == QuickUnlockSetting.On)
+        if (_app.Config.RepromptWithQuickUnlock && _app.Vault.QuickUnlockSetting == QuickUnlockSetting.On)
         {
             var before = _mode;
             SetMode(Mode.Busy);
@@ -603,25 +603,16 @@ public partial class QuickWindow : Window
         return CopyAsync(item, new CopyAction(row.Label, row.Field.Value, sensitive));
     }
 
+    private static string CopyPasswordKeys => $"{KeyCaps.Primary}+{KeyCaps.Shift}+C";
+
     private Task FillAsync(VaultItem item, bool passwordOnly)
     {
         var unavailable = _app.Platform.AutoTypeUnavailableReason(_target);
+        // A fill that cannot run never copies the password by itself: the user decides whether it goes on the clipboard (L2).
         if (unavailable != null)
         {
-            return RunGuardedAsync(item, true, async () =>
-            {
-                if (item.Password is { Length: > 0 } pw)
-                {
-                    var clearing = _app.CopyAsync(pw, true);
-                    _app.Usage.Record(item.Id);
-                    Toast($"Can't auto-type ({unavailable}) · password copied");
-                    await clearing;
-                }
-                else
-                {
-                    Toast($"Can't auto-type ({unavailable})");
-                }
-            });
+            Toast(item.HasPassword ? $"Can't auto-type ({unavailable}) · {CopyPasswordKeys} copies the password" : $"Can't auto-type ({unavailable})");
+            return Task.CompletedTask;
         }
 
         if (_target is { IsBrowser: true })
@@ -664,8 +655,7 @@ public partial class QuickWindow : Window
             {
                 case AutoTypeResult.TargetNotFocused:
                     Present(_target);
-                    if (item.Password is { Length: > 0 } pw) _ = _app.CopyAsync(pw, true);
-                    Toast("Couldn't switch back to the previous window · password copied");
+                    Toast($"Couldn't switch back to the previous window · {CopyPasswordKeys} copies the password");
                     return;
                 case AutoTypeResult.Interrupted:
                     Present(_target);

@@ -2,6 +2,21 @@
 
 Non-obvious choices a reader could not predict from the code. Newest first.
 
+## D-17 The review's low findings, how each was closed — 2026-11-15
+
+L1: key buffers, the quick-unlock sealing key among them, are allocated on the pinned object heap and locked in RAM
+(VirtualLock/mlock), so zeroing reaches the only copy and keys are not paged out; pages stay locked for the process
+because pages are shared between keys. The bar is excluded from Windows Error Reporting and has a zero core-dump limit
+elsewhere. Strings for a copy or fill stay ordinary strings (D-10). L2: a fill that cannot run never copies the password
+by itself; the footer names the copy key. L3: re-prompt asks for the master password, as Bitwarden does;
+`repromptWithQuickUnlock` lets the device confirm. L4: one Windows Hello key per account (`vaultbar-` and a hash of the
+account ID), created with FailIfExists and then opened, the old shared key deleted; the Hello dialog is only raised when
+its window belongs to System32\CredentialUIBroker.exe. L5: the Windows pipe name carries 128 random bits kept in the
+user's own folder. L6: `global.json` pins the 10.0.4xx SDK band with the latest patch, Dependabot bumps it, and a weekly
+workflow fails when a .NET security release is newer than the latest Vaultbar release. No "update available" line in
+the app: it would be network traffic besides icons. L7: an icons address is used only on Bitwarden's icon hosts or the
+host of the account's own server; any other host falls back to that server or Bitwarden's cloud.
+
 ## D-16 Quick unlock lives as long as the process; across restarts only by opt-in — 2026-11-15
 
 The user key used to sit on disk, wrapped under the device key, with no lifetime: after a reboot Windows Hello or Touch

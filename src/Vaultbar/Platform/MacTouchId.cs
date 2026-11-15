@@ -16,7 +16,7 @@ public sealed class MacTouchId(ITouchIdDevice device, string keyPath) : IQuickUn
 
     public Task<bool> IsAvailableAsync() => Task.FromResult(device.Available);
 
-    public Task<(QuickUnlockStatus Status, byte[]? Signature)> SignAsync(byte[] challenge, bool createKey) =>
+    public Task<(QuickUnlockStatus Status, byte[]? Signature)> SignAsync(string account, byte[] challenge, bool createKey) =>
         Task.Run<(QuickUnlockStatus, byte[]?)>(() =>
         {
             try
@@ -48,7 +48,7 @@ public sealed class MacTouchId(ITouchIdDevice device, string keyPath) : IQuickUn
             }
         });
 
-    public Task DeleteKeyAsync()
+    public Task DeleteKeyAsync(string account)
     {
         try
         {

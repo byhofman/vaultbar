@@ -246,8 +246,10 @@ internal static class Program
 
     private static async Task FillAndOpenAsync()
     {
+        // The field copied just before clears after its 2 s; only then does an empty clipboard prove nothing was copied.
+        await UntilAsync(() => Clipboard == "", 4000);
         N.Key(N.Enter, "\r");
-        Check("Enter without Accessibility falls back to copying", await UntilAsync(() => Toast.Contains("Can't auto-type")), Toast);
+        Check("Enter without Accessibility offers the copy key and copies nothing", await UntilAsync(() => Toast.Contains("Can't auto-type") && Toast.Contains("⌘+⇧+C")) && Clipboard == "", $"{Toast} | clipboard: {(Clipboard == "" ? "empty" : "not empty")}");
 
         Find<TextBox>("SearchBox").Text = "github";
         await UntilAsync(() => Rows.FirstOrDefault()?.Title == "GitHub");

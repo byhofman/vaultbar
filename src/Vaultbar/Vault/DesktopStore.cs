@@ -188,12 +188,25 @@ public static class DesktopStore
         return Str(env?["region"]) == "EU" ? "https://vault.bitwarden.eu" : "https://vault.bitwarden.com";
     }
 
-    private static string IconsUrl(JsonNode? env)
+    private static readonly string[] CloudIconHosts = ["icons.bitwarden.net", "icons.bitwarden.eu"];
+
+    /// <summary>
+    /// Where icons come from: Bitwarden's cloud icon service, or the self-hosted server the account itself uses. An icons
+    /// address on any other host is ignored, because whoever can edit data.json could otherwise point it at their own
+    /// server and learn from the requests which sites are in the vault (L7).
+    /// </summary>
+    internal static string IconsUrl(JsonNode? env)
     {
         var urls = env?["urls"];
-        if (Str(urls?["icons"]) is { Length: > 0 } icons) return icons.TrimEnd('/');
-        if (Str(urls?["base"]) is { Length: > 0 } baseUrl) return baseUrl.TrimEnd('/') + "/icons";
-        return Str(env?["region"]) == "EU" ? "https://icons.bitwarden.eu" : "https://icons.bitwarden.net";
+        var cloud = Str(env?["region"]) == "EU" ? "https://icons.bitwarden.eu" : "https://icons.bitwarden.net";
+        var server = Str(urls?["base"]) is { Length: > 0 } b && Uri.TryCreate(b, UriKind.Absolute, out var baseUri) ? baseUri : null;
+        if (Str(urls?["icons"]) is { Length: > 0 } icons && Uri.TryCreate(icons, UriKind.Absolute, out var iconsUri) && iconsUri.Scheme == "https")
+        {
+            if (CloudIconHosts.Contains(iconsUri.IdnHost) || server != null && iconsUri.IdnHost == server.IdnHost) return icons.TrimEnd('/');
+            return server != null ? server.GetLeftPart(UriPartial.Path).TrimEnd('/') + "/icons" : cloud;
+        }
+        if (server != null) return server.GetLeftPart(UriPartial.Path).TrimEnd('/') + "/icons";
+        return cloud;
     }
 
     internal static string? Str(JsonNode? n) => n is JsonValue v && v.TryGetValue<string>(out var s) ? s : null;

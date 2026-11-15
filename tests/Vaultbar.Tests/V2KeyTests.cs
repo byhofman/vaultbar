@@ -143,9 +143,9 @@ public sealed class V2KeyTests : IDisposable
         private readonly byte[] _secret = RandomNumberGenerator.GetBytes(32);
         public string Name => "Fixed";
         public Task<bool> IsAvailableAsync() => Task.FromResult(true);
-        public Task<(QuickUnlockStatus, byte[]?)> SignAsync(byte[] challenge, bool createKey) =>
+        public Task<(QuickUnlockStatus, byte[]?)> SignAsync(string account, byte[] challenge, bool createKey) =>
             Task.FromResult<(QuickUnlockStatus, byte[]?)>((QuickUnlockStatus.Success, HMACSHA256.HashData(_secret, challenge)));
-        public Task DeleteKeyAsync() => Task.CompletedTask;
+        public Task DeleteKeyAsync(string account) => Task.CompletedTask;
     }
 
     [Fact]

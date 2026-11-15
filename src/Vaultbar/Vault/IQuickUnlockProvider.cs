@@ -10,7 +10,8 @@ public interface IQuickUnlockProvider
     /// Signs the challenge with a device-bound key that asks for the user's face, fingerprint or PIN.
     /// The same key always gives the same signature for the same challenge.
     /// </summary>
-    Task<(QuickUnlockStatus Status, byte[]? Signature)> SignAsync(byte[] challenge, bool createKey);
+    /// <param name="account">The Bitwarden account the key is for, where the device keeps a key per account.</param>
+    Task<(QuickUnlockStatus Status, byte[]? Signature)> SignAsync(string account, byte[] challenge, bool createKey);
 
-    Task DeleteKeyAsync();
+    Task DeleteKeyAsync(string account);
 }

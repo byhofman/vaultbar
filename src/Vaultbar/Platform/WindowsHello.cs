@@ -8,7 +8,8 @@ namespace Vaultbar.Platform;
 [SupportedOSPlatform("windows")]
 internal sealed unsafe class WindowsHello : IQuickUnlockProvider
 {
-    private const string KeyName = "vaultbar";
+    // Before VBR-28 every account shared this key name, so any key under it could stand in for any account's.
+    private const string LegacyKeyName = "vaultbar";
     private const string DialogClass = "Credential Dialog Xaml Host";
 
     private static readonly Guid IidKeyCredentialManagerStatics = new("6aac468b-0ef1-4ce0-8290-4106da6a63b5");
@@ -39,17 +40,37 @@ internal sealed unsafe class WindowsHello : IQuickUnlockProvider
         }
     });
 
-    public Task<(QuickUnlockStatus Status, byte[]? Signature)> SignAsync(byte[] challenge, bool createKey) => RunAsync<(QuickUnlockStatus, byte[]?)>(() =>
+    /// <summary>One Windows Hello key per Bitwarden account (L4).</summary>
+    internal static string KeyName(string account) =>
+        "vaultbar-" + Convert.ToHexStringLower(SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(account)))[..16];
+
+    public Task<(QuickUnlockStatus Status, byte[]? Signature)> SignAsync(string account, byte[] challenge, bool createKey) => RunAsync<(QuickUnlockStatus, byte[]?)>(() =>
     {
         try
         {
             using var manager = Factory("Windows.Security.Credentials.KeyCredentialManager", IidKeyCredentialManagerStatics);
-            using var name = new HString(KeyName);
+            using var name = new HString(KeyName(account));
             nint op;
-            Check(createKey
-                ? ((delegate* unmanaged[Stdcall]<nint, nint, int, nint*, int>)Slot(manager, 8))(manager, name, 0, &op)
-                : ((delegate* unmanaged[Stdcall]<nint, nint, nint*, int>)Slot(manager, 9))(manager, name, &op));
-            using var retrieval = Result(new ComPtr(op), foreground: createKey);
+            ComPtr retrieval;
+            if (createKey)
+            {
+                Delete(manager, LegacyKeyName);
+                // FailIfExists, then open: an existing key is reused, never silently replaced by whoever asks first.
+                Check(((delegate* unmanaged[Stdcall]<nint, nint, int, nint*, int>)Slot(manager, 8))(manager, name, 1, &op));
+                retrieval = Result(new ComPtr(op), foreground: true);
+                if (RawStatus(retrieval) == CredentialAlreadyExists)
+                {
+                    retrieval.Dispose();
+                    Check(((delegate* unmanaged[Stdcall]<nint, nint, nint*, int>)Slot(manager, 9))(manager, name, &op));
+                    retrieval = Result(new ComPtr(op), foreground: false);
+                }
+            }
+            else
+            {
+                Check(((delegate* unmanaged[Stdcall]<nint, nint, nint*, int>)Slot(manager, 9))(manager, name, &op));
+                retrieval = Result(new ComPtr(op), foreground: false);
+            }
+            using var _ = retrieval;
             var status = Status(retrieval);
             if (status != QuickUnlockStatus.Success) return (status, null);
 
@@ -89,16 +110,12 @@ internal sealed unsafe class WindowsHello : IQuickUnlockProvider
         }
     });
 
-    public Task DeleteKeyAsync() => RunAsync(() =>
+    public Task DeleteKeyAsync(string account) => RunAsync(() =>
     {
         try
         {
             using var manager = Factory("Windows.Security.Credentials.KeyCredentialManager", IidKeyCredentialManagerStatics);
-            using var name = new HString(KeyName);
-            nint op;
-            Check(((delegate* unmanaged[Stdcall]<nint, nint, nint*, int>)Slot(manager, 10))(manager, name, &op));
-            using var action = new ComPtr(op);
-            Wait(action, foreground: false);
+            Delete(manager, KeyName(account));
         }
         catch (Exception ex)
         {
@@ -107,10 +124,35 @@ internal sealed unsafe class WindowsHello : IQuickUnlockProvider
         return true;
     });
 
-    private static QuickUnlockStatus Status(ComPtr result)
+    private static void Delete(ComPtr manager, string keyName)
+    {
+        try
+        {
+            using var name = new HString(keyName);
+            nint op;
+            Check(((delegate* unmanaged[Stdcall]<nint, nint, nint*, int>)Slot(manager, 10))(manager, name, &op));
+            using var action = new ComPtr(op);
+            Wait(action, foreground: false);
+        }
+        catch (Exception ex)
+        {
+            // Usually no such key, which leaves nothing to delete.
+            Log.Write($"windows hello delete: {Log.Shape(ex)}");
+        }
+    }
+
+    private const int CredentialAlreadyExists = 5;
+
+    private static int RawStatus(ComPtr result)
     {
         int status;
         Check(((delegate* unmanaged[Stdcall]<nint, int*, int>)Slot(result, 7))(result, &status));
+        return status;
+    }
+
+    private static QuickUnlockStatus Status(ComPtr result)
+    {
+        var status = RawStatus(result);
         return status switch
         {
             0 => QuickUnlockStatus.Success,
@@ -152,10 +194,32 @@ internal sealed unsafe class WindowsHello : IQuickUnlockProvider
             }
             if (Environment.TickCount64 > deadline) throw new TimeoutException();
 
-            // The Hello dialog cannot be given an owner window from a desktop app and often opens behind ours.
-            if (!raised && Native.FindWindowW(DialogClass, null) is var dialog and not 0)
+            // The Hello dialog cannot be given an owner window from a desktop app and often opens behind ours. Only the
+            // system's own credential UI is raised: any app can make a window with this class name to catch the PIN (L4).
+            if (!raised && Native.FindWindowW(DialogClass, null) is var dialog and not 0 && IsSystemCredentialUi(dialog))
                 raised = Native.SetForegroundWindow(dialog) != 0;
             Thread.Sleep(30);
+        }
+    }
+
+    private static readonly string CredentialUiHost =
+        Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.System), "CredentialUIBroker.exe");
+
+    private static bool IsSystemCredentialUi(nint window)
+    {
+        Native.GetWindowThreadProcessId(window, out var pid);
+        var process = Native.OpenProcess(0x1000 /* PROCESS_QUERY_LIMITED_INFORMATION */, 0, pid);
+        if (process == 0) return false;
+        try
+        {
+            var buffer = stackalloc char[1024];
+            var length = 1024u;
+            return Native.QueryFullProcessImageNameW(process, 0, buffer, &length) != 0
+                   && string.Equals(new string(buffer, 0, (int)length), CredentialUiHost, StringComparison.OrdinalIgnoreCase);
+        }
+        finally
+        {
+            Native.CloseHandle(process);
         }
     }
 
@@ -239,5 +303,9 @@ internal sealed unsafe class WindowsHello : IQuickUnlockProvider
         [DllImport("combase.dll")] public static extern int WindowsDeleteString(nint str);
         [DllImport("user32.dll", CharSet = CharSet.Unicode)] public static extern nint FindWindowW(string className, string? windowName);
         [DllImport("user32.dll")] public static extern int SetForegroundWindow(nint hWnd);
+        [DllImport("user32.dll")] public static extern uint GetWindowThreadProcessId(nint hWnd, out uint pid);
+        [DllImport("kernel32.dll")] public static extern nint OpenProcess(uint access, int inherit, uint pid);
+        [DllImport("kernel32.dll")] public static extern int CloseHandle(nint handle);
+        [DllImport("kernel32.dll", CharSet = CharSet.Unicode)] public static extern int QueryFullProcessImageNameW(nint process, uint flags, char* name, uint* size);
     }
 }
