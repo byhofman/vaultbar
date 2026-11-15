@@ -2,6 +2,25 @@
 
 Non-obvious choices a reader could not predict from the code. Newest first.
 
+## D-14 Browsers are matched by the loaded document's address — 2026-11-15
+
+A page chooses its own title, so a look-alike page titled "Contoso: Sign in" used to get the real Contoso login offered
+first and filled on Enter (H1). In a browser, Vaultbar now reads the URL of the page itself from the accessibility tree:
+the value of the first on-screen document through UI Automation on Windows, the `AXURL` of the visible web area on
+macOS. That is what was loaded, not the address-bar text (which may be half-typed) and nothing a page can set. Frames are
+never read, hidden tabs are skipped by being off screen, and a window with two pages (a side panel) counts as unknown.
+Matching is Bitwarden's own `LoginUriView.matchesUri`: the six match options, the account's default and equivalent
+domains from `data.json`, the google.com/script.google.com exclusion, and base domains by the Public Suffix List with the
+private section, as tldts does it. The list (MPL-2.0, publicsuffix.org) is embedded, because Vaultbar never fetches
+anything but icons; it is refreshed with the source like any other dependency. When the address is unknown or not the
+item's, the footer shows the host and a second Enter fills, and only for that host: if the page moved meanwhile, it asks
+again. On macOS auto-type also stops when another window of the same app takes focus. Browsers are known by process name
+or bundle identifier, and any other app whose window shows an http(s) page (an unlisted browser, a web view) is treated
+as one after a quick look. Firefox on macOS gives its page no size, which the read cannot tell from a hidden tab, so its
+address stays unknown and every fill there asks. Linux reads no address yet, so browsers there get no suggestions and
+always ask. Other apps keep title matching without a second Enter, as the review proposed; the residual is an app whose
+title someone else writes, such as a terminal connected to a remote host.
+
 ## D-13 Tmds.DBus.Protocol comes from Avalonia only — 2026-11-15
 
 Dependabot bumped the direct Tmds.DBus.Protocol reference from 0.21.3 to 0.95.2, and the build broke on all three
