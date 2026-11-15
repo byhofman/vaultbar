@@ -21,7 +21,11 @@ updates:
       actions:
         patterns: ['*']
 
+  # The SDK band follows the target framework: .NET 11 is the same planned migration as the packages above.
   - package-ecosystem: dotnet-sdk
     directory: /
     schedule:
       interval: weekly
+    ignore:
+      - dependency-name: '*'
+        update-types: ['version-update:semver-major']
