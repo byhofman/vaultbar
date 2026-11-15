@@ -95,6 +95,7 @@ public sealed class VaultService : IDisposable
         {
             var snapshot = DesktopStore.Read(StorePath);
             ForgetQuickUnlockOfGoneAccounts(snapshot.AccountIds);
+            _quickStore.Tidy(snapshot.UserId, KeepKeyUntil, Latest);
             ApplyMetadata(snapshot);
             State = VaultState.Locked;
             Error = null;
@@ -156,6 +157,7 @@ public sealed class VaultService : IDisposable
         {
             var snapshot = await Task.Run(() => DesktopStore.Read(StorePath));
             ForgetQuickUnlockOfGoneAccounts(snapshot.AccountIds);
+            _quickStore.Tidy(snapshot.UserId, KeepKeyUntil, Latest);
             if (_quickStore.Load(snapshot.UserId, KeepKeyUntil, Latest) is not { } entry) return (QuickUnlockStatus.Unavailable, null);
             // A copy, taken under the lock: a lock or sign-out during the prompt may zero the session itself.
             Session? session;
@@ -363,6 +365,17 @@ public sealed class VaultService : IDisposable
     }
 
     public void Lock() => Lock(keepForQuickUnlock: true);
+
+    /// <summary>
+    /// The bar closed: under Bitwarden's "Immediately" the vault locks now.
+    /// </summary>
+    /// <returns>True when it locked.</returns>
+    public bool LockBecauseTheBarClosed()
+    {
+        if (!LockPolicy.OnBarHidden || State != VaultState.Unlocked) return false;
+        Lock();
+        return true;
+    }
 
     private void Lock(bool keepForQuickUnlock)
     {

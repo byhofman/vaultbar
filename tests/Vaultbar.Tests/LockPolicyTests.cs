@@ -96,4 +96,29 @@ public class LockPolicyTests
             if (Directory.Exists(dir)) Directory.Delete(dir, true);
         }
     }
+
+    [Theory]
+    [InlineData("0", true)]
+    [InlineData("15", false)]
+    [InlineData("\"onLocked\"", false)]
+    public async Task ClosingTheBar_LocksOnlyUnderImmediately(string json, bool locks)
+    {
+        var dir = Path.Combine(Path.GetTempPath(), "vaultbar-tests-" + Guid.NewGuid().ToString("N"));
+        try
+        {
+            var path = Path.Combine(dir, "data.json");
+            new VaultFixture { VaultTimeoutJson = json }.Write(path, "correct horse");
+            using var vault = new VaultService(new Config { DataPath = path });
+            vault.Probe();
+            Assert.Null(await vault.UnlockAsync("correct horse"));
+
+            Assert.Equal(locks, vault.LockBecauseTheBarClosed());
+            Assert.Equal(locks ? VaultState.Locked : VaultState.Unlocked, vault.State);
+            Assert.False(vault.LockBecauseTheBarClosed());
+        }
+        finally
+        {
+            if (Directory.Exists(dir)) Directory.Delete(dir, true);
+        }
+    }
 }
