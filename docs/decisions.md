@@ -16,7 +16,8 @@ anything but icons; it is refreshed with the source like any other dependency. W
 item's, the footer shows the host and a second Enter fills, and only for that host: if the page moved meanwhile, it asks
 again. On macOS auto-type also stops when another window of the same app takes focus. Browsers are known by process name
 or bundle identifier, and any other app whose window shows an http(s) page (an unlisted browser, a web view) is treated
-as one after a quick look. Firefox on macOS gives its page no size, which the read cannot tell from a hidden tab, so its
+as one after a quick look; on Windows only when that page is web content (UIA framework Chrome or Gecko), since in
+any other app a document holds its own text, which a file could fill with an address. Firefox on macOS gives its page no size, which the read cannot tell from a hidden tab, so its
 address stays unknown and every fill there asks. Linux reads no address yet, so browsers there get no suggestions and
 always ask. Other apps keep title matching without a second Enter, as the review proposed; the residual is an app whose
 title someone else writes, such as a terminal connected to a remote host.
