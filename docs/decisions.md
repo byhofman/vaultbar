@@ -2,6 +2,14 @@
 
 Non-obvious choices a reader could not predict from the code. Newest first.
 
+## D-23 Selection is a wash; the yellow moves to the lock and the star — 2026-11-19
+
+The owner calls outlines on selection dated, so D-20's 3 px yellow bar beside the selected row is gone. The selected row
+sits on a stronger brand-blue wash with an accent chevron instead. The yellow of the mark now colours the header lock
+(unlock, re-prompt, errors) and the favourite star. In light it is deepened to #A97A00, because #F4C542 is 1.6:1 on
+white, below the 3:1 an icon needs. `BrandingTests` now checks the tokens for AA contrast instead of checking that the
+brand token is the exact logo yellow in both themes. Details: `docs/design/restyle-2026-11.md`.
+
 ## D-22 Reporting an issue opens a prefilled GitHub issue — 2026-11-15
 
 The owner cut in-app feedback for Vaultbar (VBR-19) in favour of GitHub issues (VBR-29). The tray menu's "Report an

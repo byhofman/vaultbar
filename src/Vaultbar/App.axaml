@@ -10,31 +10,35 @@
         <ResourceDictionary x:Key="Light">
           <SolidColorBrush x:Key="BqSurface" Color="#FFFFFF" />
           <SolidColorBrush x:Key="BqFooter" Color="#F5F7FA" />
-          <SolidColorBrush x:Key="BqBorder" Color="#DFE4EA" />
+          <SolidColorBrush x:Key="BqBorder" Color="#D8DEE6" />
           <SolidColorBrush x:Key="BqText" Color="#1A1F27" />
-          <SolidColorBrush x:Key="BqMuted" Color="#667285" />
+          <SolidColorBrush x:Key="BqMuted" Color="#5B6678" />
+          <!-- The deep stop of the mark's blue gradient. -->
           <SolidColorBrush x:Key="BqAccent" Color="#175DDC" />
-          <!-- The yellow of the Vaultbar mark, used only as a small hint: the bar beside the selected row. -->
-          <SolidColorBrush x:Key="BqBrand" Color="#F4C542" />
-          <SolidColorBrush x:Key="BqSelected" Color="#E7EEFC" />
-          <SolidColorBrush x:Key="BqHover" Color="#F2F5F9" />
-          <SolidColorBrush x:Key="BqKbd" Color="#E7EBF0" />
+          <!-- The mark's key yellow, deepened to 3:1 on white and on the selection wash, as the light icon deepens its colours. -->
+          <SolidColorBrush x:Key="BqBrand" Color="#A97A00" />
+          <SolidColorBrush x:Key="BqSelected" Color="#DFE9FD" />
+          <SolidColorBrush x:Key="BqHover" Color="#F1F4F8" />
+          <SolidColorBrush x:Key="BqKbd" Color="#E6EAF0" />
           <SolidColorBrush x:Key="BqTile" Color="#EDF0F4" />
           <SolidColorBrush x:Key="BqError" Color="#C3361F" />
+          <BoxShadows x:Key="BqShadow">0 14 36 0 #38000000</BoxShadows>
         </ResourceDictionary>
         <ResourceDictionary x:Key="Dark">
-          <SolidColorBrush x:Key="BqSurface" Color="#1F242C" />
-          <SolidColorBrush x:Key="BqFooter" Color="#191D24" />
-          <SolidColorBrush x:Key="BqBorder" Color="#353C47" />
-          <SolidColorBrush x:Key="BqText" Color="#E8ECF1" />
-          <SolidColorBrush x:Key="BqMuted" Color="#8F9AAB" />
-          <SolidColorBrush x:Key="BqAccent" Color="#7DA4F6" />
+          <SolidColorBrush x:Key="BqSurface" Color="#262B34" />
+          <SolidColorBrush x:Key="BqFooter" Color="#20242B" />
+          <!-- A lit edge: on a dark desktop the shadow alone does not separate the bar from what is behind it. -->
+          <SolidColorBrush x:Key="BqBorder" Color="#4A5363" />
+          <SolidColorBrush x:Key="BqText" Color="#ECEFF4" />
+          <SolidColorBrush x:Key="BqMuted" Color="#A3ADBC" />
+          <SolidColorBrush x:Key="BqAccent" Color="#82A9FF" />
           <SolidColorBrush x:Key="BqBrand" Color="#F4C542" />
-          <SolidColorBrush x:Key="BqSelected" Color="#283958" />
-          <SolidColorBrush x:Key="BqHover" Color="#272D36" />
-          <SolidColorBrush x:Key="BqKbd" Color="#313843" />
-          <SolidColorBrush x:Key="BqTile" Color="#2C323C" />
+          <SolidColorBrush x:Key="BqSelected" Color="#2A3C64" />
+          <SolidColorBrush x:Key="BqHover" Color="#2F3540" />
+          <SolidColorBrush x:Key="BqKbd" Color="#3A4250" />
+          <SolidColorBrush x:Key="BqTile" Color="#353C48" />
           <SolidColorBrush x:Key="BqError" Color="#F2806F" />
+          <BoxShadows x:Key="BqShadow">0 14 36 0 #99000000</BoxShadows>
         </ResourceDictionary>
       </ResourceDictionary.ThemeDictionaries>
 
@@ -80,20 +84,32 @@
     </Style>
     <Style Selector="TextBox.bare /template/ TextBlock#PART_Watermark">
       <Setter Property="Foreground" Value="{DynamicResource BqMuted}" />
+      <!-- Fluent draws the watermark at half opacity, which takes it below AA. -->
+      <Setter Property="Opacity" Value="1" />
     </Style>
 
     <Style Selector="Border.row">
       <Setter Property="Background" Value="Transparent" />
       <Setter Property="CornerRadius" Value="8" />
-      <Setter Property="BorderThickness" Value="3,0,0,0" />
-      <Setter Property="BorderBrush" Value="Transparent" />
     </Style>
     <Style Selector="Border.row:pointerover">
       <Setter Property="Background" Value="{DynamicResource BqHover}" />
     </Style>
     <Style Selector="Border.row.selected">
       <Setter Property="Background" Value="{DynamicResource BqSelected}" />
-      <Setter Property="BorderBrush" Value="{DynamicResource BqBrand}" />
+    </Style>
+    <Style Selector="PathIcon.chevron">
+      <Setter Property="Foreground" Value="{DynamicResource BqMuted}" />
+    </Style>
+    <Style Selector="Border.row.selected PathIcon.chevron">
+      <Setter Property="Foreground" Value="{DynamicResource BqAccent}" />
+    </Style>
+
+    <Style Selector="PathIcon.header">
+      <Setter Property="Foreground" Value="{DynamicResource BqAccent}" />
+    </Style>
+    <Style Selector="PathIcon.header.locked">
+      <Setter Property="Foreground" Value="{DynamicResource BqBrand}" />
     </Style>
 
     <Style Selector="TextBlock.section">
