@@ -198,7 +198,9 @@ public partial class QuickWindow : Window
         HelpPanel.IsVisible = mode == Mode.Help;
         MessagePanel.IsVisible = mode is Mode.Message or Mode.Locked or Mode.Reprompt or Mode.Busy
                                  || mode == Mode.Search && _rows.Count == 0;
-        HeaderIcon.Data = ResultRow.Resource(passwordInput || mode == Mode.Message ? "IconLock" : "IconSearch");
+        var locked = passwordInput || mode == Mode.Message;
+        HeaderIcon.Data = ResultRow.Resource(locked ? "IconLock" : "IconSearch");
+        HeaderIcon.Classes.Set("locked", locked);
         if (mode != Mode.Busy) MessageError.IsVisible = false;
         PasswordBox.Watermark = "Master password";
         if (mode == Mode.Details) _totpTimer.Start();

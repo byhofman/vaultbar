@@ -22,19 +22,19 @@
           Background="{DynamicResource BqSurface}"
           BorderBrush="{DynamicResource BqBorder}"
           BorderThickness="1"
-          BoxShadow="0 14 36 0 #55000000">
+          BoxShadow="{DynamicResource BqShadow}">
     <DockPanel>
 
-      <Grid DockPanel.Dock="Top" ColumnDefinitions="Auto,*,Auto" Margin="16,10,14,10">
-        <PathIcon x:Name="HeaderIcon" Width="20" Height="20" Foreground="{DynamicResource BqAccent}" VerticalAlignment="Center" />
+      <Grid DockPanel.Dock="Top" ColumnDefinitions="Auto,*,Auto" Margin="20,10,20,10">
+        <PathIcon x:Name="HeaderIcon" Classes="header" Width="20" Height="20" VerticalAlignment="Center" />
         <TextBox x:Name="SearchBox" Grid.Column="1" Classes="bare" Watermark="Search Bitwarden" />
         <TextBox x:Name="PasswordBox" Grid.Column="1" Classes="bare" PasswordChar="•" IsVisible="False" />
-        <TextBlock x:Name="HeaderStatus" Grid.Column="2" Classes="hint" Margin="8,0,4,0" />
+        <TextBlock x:Name="HeaderStatus" Grid.Column="2" Classes="hint" Margin="12,0,0,0" />
       </Grid>
 
       <Border DockPanel.Dock="Top" Height="1" Background="{DynamicResource BqBorder}" />
 
-      <Border DockPanel.Dock="Bottom" Background="{DynamicResource BqFooter}" BorderBrush="{DynamicResource BqBorder}" BorderThickness="0,1,0,0" Padding="16,8">
+      <Border DockPanel.Dock="Bottom" Background="{DynamicResource BqFooter}" BorderBrush="{DynamicResource BqBorder}" BorderThickness="0,1,0,0" Padding="20,8">
         <Panel MinHeight="20" ClipToBounds="True">
           <StackPanel x:Name="Hints" Orientation="Horizontal" Spacing="14" />
           <TextBlock x:Name="FooterText" Classes="hint toast" IsVisible="False" TextTrimming="CharacterEllipsis" />
@@ -49,7 +49,7 @@
                 <TextBlock Classes="section" Text="{Binding Text}" />
               </DataTemplate>
               <DataTemplate DataType="ui:ResultRow">
-                <Border Classes="row" Classes.selected="{Binding IsSelected}" Height="50" Margin="8,1" Padding="9,0,12,0">
+                <Border Classes="row" Classes.selected="{Binding IsSelected}" Height="50" Margin="8,1" Padding="12,0">
                   <Grid ColumnDefinitions="Auto,*,Auto">
                     <Panel Width="30" Height="30" VerticalAlignment="Center">
                       <Border CornerRadius="7" Background="{Binding TileBrush}" IsVisible="{Binding ShowTile}">
@@ -67,8 +67,8 @@
                     </StackPanel>
                     <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="10" VerticalAlignment="Center">
                       <PathIcon Data="{StaticResource IconTimer}" Width="13" Height="13" Foreground="{DynamicResource BqMuted}" IsVisible="{Binding HasTotp}" ToolTip.Tip="Has a one-time code" />
-                      <PathIcon Data="{StaticResource IconStar}" Width="13" Height="13" Foreground="#E0A100" IsVisible="{Binding IsFavorite}" />
-                      <PathIcon Data="{StaticResource IconChevron}" Width="16" Height="16" Foreground="{DynamicResource BqMuted}" IsVisible="{Binding IsSelected}" />
+                      <PathIcon Data="{StaticResource IconStar}" Width="13" Height="13" Foreground="{DynamicResource BqBrand}" IsVisible="{Binding IsFavorite}" />
+                      <PathIcon Classes="chevron" Data="{StaticResource IconChevron}" Width="16" Height="16" IsVisible="{Binding IsSelected}" />
                     </StackPanel>
                   </Grid>
                 </Border>
@@ -89,7 +89,7 @@
             <ItemsControl x:Name="Details" Margin="0,0,0,6">
               <ItemsControl.ItemTemplate>
                 <DataTemplate DataType="ui:DetailRow">
-                  <Border Classes="row" Classes.selected="{Binding IsSelected}" Margin="8,1" Padding="11,7,14,7">
+                  <Border Classes="row" Classes.selected="{Binding IsSelected}" Margin="8,1" Padding="12,7">
                     <Grid ColumnDefinitions="*,Auto">
                       <StackPanel Spacing="1">
                         <TextBlock Text="{Binding Label}" FontSize="11.5" Foreground="{DynamicResource BqMuted}" />
@@ -105,12 +105,12 @@
           </ScrollViewer>
         </DockPanel>
 
-        <StackPanel x:Name="HelpPanel" IsVisible="False" Margin="24,16,24,18" Spacing="8">
+        <StackPanel x:Name="HelpPanel" IsVisible="False" Margin="20,16,20,18" Spacing="8">
           <TextBlock Text="Keyboard shortcuts" FontSize="15" FontWeight="SemiBold" Foreground="{DynamicResource BqText}" />
           <StackPanel x:Name="HelpList" />
         </StackPanel>
 
-        <StackPanel x:Name="MessagePanel" IsVisible="False" Margin="24,22,24,24" Spacing="6">
+        <StackPanel x:Name="MessagePanel" IsVisible="False" Margin="20,20,20,22" Spacing="6">
           <TextBlock x:Name="MessageTitle" FontSize="15" FontWeight="SemiBold" Foreground="{DynamicResource BqText}" TextWrapping="Wrap" />
           <TextBlock x:Name="MessageBody" FontSize="13" Foreground="{DynamicResource BqMuted}" TextWrapping="Wrap" />
           <TextBlock x:Name="MessageError" FontSize="13" Foreground="{DynamicResource BqError}" TextWrapping="Wrap" IsVisible="False" />
