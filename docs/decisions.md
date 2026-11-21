@@ -2,6 +2,10 @@
 
 Non-obvious choices a reader could not predict from the code. Newest first.
 
+## D-24 No dotted or dashed dividers — 2026-11-21
+
+The owner's rule for every byhofman app (2026-11-20): "Dotted divider remove that applies to all apps!" Rows and sections are separated by spacing and grouping; where a line is needed it is a solid hairline in the surface tone. A sweep of the app found no dotted or dashed line of any kind, so nothing changed on screen.
+
 ## D-23 Selection is a wash; the yellow moves to the lock and the star — 2026-11-19
 
 The owner calls outlines on selection dated, so D-20's 3 px yellow bar beside the selected row is gone. The selected row
