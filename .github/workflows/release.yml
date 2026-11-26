@@ -1,10 +1,10 @@
 name: build
 
+# Release tags and by hand only: no CI on pull requests or main, by the owner's choice.
 on:
   push:
-    branches: [main]
     tags: ['v*']
-  pull_request:
+  workflow_dispatch:
 
 permissions:
   contents: read
