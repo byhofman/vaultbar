@@ -13,7 +13,7 @@ public sealed class Config
     public bool LockOnSystemLock { get; set; } = true;
     public int ClipboardClearSeconds { get; set; } = 30;
     /// <summary>Seconds after the bar closes during which reopening it restores the last search. 0 turns it off.</summary>
-    public int KeepSearchSeconds { get; set; }
+    public int KeepSearchSeconds { get; set; } = 60;
 
     public string AutotypeSequence { get; set; } = "{USERNAME}{TAB}{PASSWORD}";
     public bool CopyTotpAfterFill { get; set; } = true;

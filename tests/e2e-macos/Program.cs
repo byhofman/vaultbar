@@ -46,7 +46,7 @@ internal static class Program
         new QuickUnlockStore(Path.Combine(Paths.CacheDir, "quick-unlock.dat")).SaveDeclined(VaultFixture.UserId);
         Directory.CreateDirectory(Paths.ConfigDir);
         File.WriteAllText(Config.FilePath, $$"""
-            { "dataPath": "{{_vaultPath}}", "showFavicons": false, "clipboardClearSeconds": 2, "hideAfterCopy": false, "lockAfterMinutes": 1 }
+            { "dataPath": "{{_vaultPath}}", "showFavicons": false, "clipboardClearSeconds": 2, "hideAfterCopy": false, "keepSearchSeconds": 0, "lockAfterMinutes": 1 }
             """);
 
         System.Diagnostics.Process.Start(Environment.ProcessPath!, ["--target", Environment.ProcessId.ToString()]);

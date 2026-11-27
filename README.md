@@ -159,7 +159,7 @@ itself: it only opens the page in your browser. Never paste anything from your v
 | `lockAfterMinutes` | `null` | Idle lock in minutes, counted while the bar is open too; `0` turns every automatic lock off, the Bitwarden timeout included. `null` follows the Bitwarden desktop vault timeout: minutes as set, "Immediately" locks when the bar closes, "On system idle" after 5 minutes without input, "On system lock" and "On sleep" lock then (both also after 15 idle minutes); "On restart" and "Never" lock after 15 idle minutes |
 | `lockOnSystemLock` | `true` | Lock when the session locks or the machine sleeps |
 | `clipboardClearSeconds` | `30` | `0` disables clearing |
-| `keepSearchSeconds` | `0` | Reopening the bar within this many seconds restores the last search, selected so typing replaces it, for copying a username and then a password without searching again. `60` is a good value; `0` turns it off. Only the search text is kept, in memory, and locking forgets it |
+| `keepSearchSeconds` | `60` | Reopening the bar within this many seconds restores the last search, selected so typing replaces it, for copying a username and then a password without searching again. `0` turns it off. Only the search text is kept, in memory, and locking forgets it |
 | `autotypeSequence` | `{USERNAME}{TAB}{PASSWORD}` | Tokens: `{USERNAME}` `{PASSWORD}` `{TOTP}` `{TAB}` `{ENTER}` `{DELAY:ms}`. Without a username, the following `{TAB}` is skipped |
 | `copyTotpAfterFill` | `true` | Copy the one-time code after auto-type, ready to paste on the next screen |
 | `hideAfterCopy` | `true` | Close the bar after copying |
