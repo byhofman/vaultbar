@@ -207,7 +207,7 @@ jobs:
           persist-credentials: false
 
       - id: version
-        uses: byhofman/pipeline-templates/.github/actions/resolve-version@v4
+        uses: ./.github/actions/resolve-version
 
       - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
@@ -224,7 +224,7 @@ jobs:
             dist/*.dmg
 
       # Notes come from the annotated tag the release skill pushed; the release stays a draft until every file is on it.
-      - uses: byhofman/pipeline-templates/.github/actions/upsert-release@v4
+      - uses: ./.github/actions/upsert-release
         with:
           prerelease: ${{ steps.version.outputs.is-prerelease }}
           token: ${{ github.token }}
