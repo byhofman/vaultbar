@@ -45,6 +45,10 @@ public partial class QuickWindow : Window
     private int _selected = -1;
     private int _detailSelected;
     private long _shownAt;
+
+    /// <summary>The last search and when the bar closed, kept in memory for <c>keepSearchSeconds</c>; never the results.</summary>
+    private string? _keptQuery;
+    private long _keptAt;
     private bool _typing;
 
     public QuickWindow()
@@ -95,7 +99,8 @@ public partial class QuickWindow : Window
         _fillConfirmedFor = null;
         _repromptPassed.Clear();
         _afterReprompt = null;
-        SearchBox.Text = "";
+        var restored = TakeKeptQuery();
+        SearchBox.Text = restored ?? "";
         PasswordBox.Text = "";
         CloseDetails();
         UpdateMode();
@@ -107,6 +112,8 @@ public partial class QuickWindow : Window
         _shownAt = Environment.TickCount64;
         _app.Vault.Touch();
         Dispatcher.UIThread.Post(FocusInput, DispatcherPriority.Input);
+        // Selected, so typing replaces it.
+        if (restored != null) Dispatcher.UIThread.Post(SearchBox.SelectAll, DispatcherPriority.Input);
         if (_mode == Mode.Locked && _app.Vault.CanQuickUnlock)
             Dispatcher.UIThread.Post(() => _ = QuickUnlockAsync(), DispatcherPriority.Background);
     }
@@ -115,15 +122,41 @@ public partial class QuickWindow : Window
     {
         Hide();
         _app.Platform.AfterHide();
+        KeepQuery();
         SearchBox.Text = "";
         PasswordBox.Text = "";
         ForgetItems();
         _app.OnBarHidden();
     }
 
+    private void KeepQuery()
+    {
+        var query = SearchBox.Text;
+        var keep = _app.Config.KeepSearchSeconds > 0 && _mode is Mode.Search or Mode.Details && !string.IsNullOrWhiteSpace(query)
+                   && _app.Vault.State == VaultState.Unlocked;
+        _keptQuery = keep ? query : null;
+        _keptAt = Environment.TickCount64;
+    }
+
+    /// <returns>The kept search if the bar was closed no longer than <c>keepSearchSeconds</c> ago and the vault is still unlocked.</returns>
+    private string? TakeKeptQuery()
+    {
+        var query = _keptQuery;
+        _keptQuery = null;
+        var seconds = _app.Config.KeepSearchSeconds;
+        return query != null && seconds > 0 && _app.Vault.State == VaultState.Unlocked
+               && Environment.TickCount64 - _keptAt <= seconds * 1000L
+            ? query
+            : null;
+    }
+
     public void OnVaultChanged()
     {
-        if (_app.Vault.State != VaultState.Unlocked) ForgetItems();
+        if (_app.Vault.State != VaultState.Unlocked)
+        {
+            ForgetItems();
+            _keptQuery = null;
+        }
         if (!IsVisible) return;
         if (_mode is Mode.Search or Mode.Details or Mode.Reprompt or Mode.Help && _app.Vault.State == VaultState.Unlocked)
         {

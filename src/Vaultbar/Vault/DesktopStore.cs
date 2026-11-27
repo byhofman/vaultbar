@@ -34,6 +34,21 @@ public static class DesktopStore
         }
     }
 
+    /// <summary>
+    /// Which kind of location a data file is in, for the log: the path itself carries the user name, so it never goes there.
+    /// </summary>
+    public static string Describe(string? path)
+    {
+        if (path is null) return "no data file";
+        if (Environment.GetEnvironmentVariable("BITWARDEN_APPDATA_DIR") is { Length: > 0 } custom
+            && path == Path.Combine(custom, "data.json")) return "custom folder";
+        if (path.Contains($"{Path.DirectorySeparatorChar}Containers{Path.DirectorySeparatorChar}")) return "sandbox container";
+        if (path.Contains($"{Path.DirectorySeparatorChar}Packages{Path.DirectorySeparatorChar}")) return "store package";
+        if (path.Contains($"{Path.DirectorySeparatorChar}snap{Path.DirectorySeparatorChar}")) return "snap";
+        if (path.Contains($"{Path.DirectorySeparatorChar}.var{Path.DirectorySeparatorChar}")) return "flatpak";
+        return "standard folder";
+    }
+
     public static string? Locate(string? overridePath)
     {
         if (!string.IsNullOrWhiteSpace(overridePath))

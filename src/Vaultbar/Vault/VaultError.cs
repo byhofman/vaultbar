@@ -13,5 +13,6 @@ public enum VaultError
     KeyFormatUnsupported,
     WrongPassword,
     QuickUnlockMismatch,
+    AccessDenied,
     Unreadable,
 }
