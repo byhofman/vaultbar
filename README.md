@@ -85,6 +85,16 @@ curl -fsSL https://raw.githubusercontent.com/byhofman/vaultbar/main/install/inst
 
 Then press **Ctrl+Shift+Space** (macOS: **⌘⇧Space**).
 
+> **Beta, not yet signed.** Vaultbar's Windows builds don't have a code-signing certificate yet, so antivirus can block a
+> new one. If Defender stops `vaultbar.exe` (*Access is denied*, or nothing starts), allow it by running this once in
+> PowerShell **as administrator**:
+>
+> ```pwsh
+> Add-MpPreference -AttackSurfaceReductionOnlyExclusions "$env:LOCALAPPDATA\Programs\Vaultbar\vaultbar.exe"
+> ```
+>
+> On a work device whose security is managed (Intune), a local exclusion may not count; ask your administrator.
+
 **macOS disk image:** each release also has `vaultbar-osx-arm64.dmg` (Apple Silicon) and `vaultbar-osx-x64.dmg` (Intel).
 Drag Vaultbar to Applications. Until releases are signed with a Developer ID, a browser download needs **System Settings ›
 Privacy & Security › Open Anyway** once; the one-liner above does not.
