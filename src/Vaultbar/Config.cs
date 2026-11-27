@@ -29,7 +29,7 @@ public sealed class Config
     /// </summary>
     public bool RepromptWithQuickUnlock { get; set; }
 
-    /// <summary>Keeps the quick-unlock key on disk so Windows Hello or Touch ID also opens the vault after a restart (VBR-25).</summary>
+    /// <summary>Keeps the quick-unlock key on disk so Windows Hello or Touch ID also opens the vault after a restart (#62).</summary>
     public bool QuickUnlockAcrossRestarts { get; set; }
 
     /// <summary>How long after the last master-password unlock a key kept across restarts still opens the vault.</summary>

@@ -30,7 +30,7 @@ public sealed class VaultService : IDisposable
 
     // Quick unlock for this process: the user key, sealed under a random key that never leaves memory, kept from the
     // moment the vault locks. It dies with the process, so after a restart only the master password opens the vault
-    // unless the user opted in to quick unlock across restarts (VBR-25).
+    // unless the user opted in to quick unlock across restarts (#62).
     private Session? _session;
     private DateTimeOffset? _passwordAt;
 

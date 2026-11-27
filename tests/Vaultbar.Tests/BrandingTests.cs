@@ -4,7 +4,7 @@ using Xunit;
 
 namespace Vaultbar.Tests;
 
-/// <summary>VBR-18 and the 2026-11 polish: the theme tokens carry the mark's colours and keep WCAG AA in both themes.</summary>
+/// <summary>#58 and the 2026-11 polish: the theme tokens carry the mark's colours and keep WCAG AA in both themes.</summary>
 public partial class BrandingTests
 {
     [GeneratedRegex("<ResourceDictionary x:Key=\"(Light|Dark)\">(.*?)</ResourceDictionary>", RegexOptions.Singleline)]

@@ -2,7 +2,7 @@ using Xunit;
 
 namespace Vaultbar.Tests;
 
-/// <summary>VBR-29: "Report an issue" opens GitHub's form for this repository with version and system filled in.</summary>
+/// <summary>#65: "Report an issue" opens GitHub's form for this repository with version and system filled in.</summary>
 public class IssueReportTests
 {
     [Fact]

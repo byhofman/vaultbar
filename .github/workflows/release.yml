@@ -120,7 +120,7 @@ jobs:
   # Windows builds here, not on Linux, because Authenticode signing needs a Windows runner.
   windows:
     runs-on: windows-latest
-    # Only a release tag, and only once signing is set up (VBR-8), enters the environment Azure's federated credential trusts.
+    # Only a release tag, and only once signing is set up (#68), enters the environment Azure's federated credential trusts.
     environment: ${{ github.ref_type == 'tag' && vars.SIGNING_ENABLED == 'true' && 'signing' || '' }}
     permissions:
       contents: read

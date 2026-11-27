@@ -264,7 +264,7 @@ itself: it only opens the page in your browser. Never paste anything from your v
 - Organisation items are tested against a synthetic vault and the Bitwarden SDK's RSA test vectors, not yet against a real organisation vault. Items of provider-managed organisations are not decrypted; they count as failed and the rest of the vault opens.
 - Archived and deleted items are not shown.
 - Windows: auto-type cannot type into apps running as administrator unless Vaultbar does too (UIPI).
-- macOS: tested on Apple Silicon with a synthetic vault. Typing into another app, the physical hotkey press, a real click on the menu bar icon and a real screen lock still need a manual check (VBR-7).
+- macOS: tested on Apple Silicon with a synthetic vault. Typing into another app, the physical hotkey press, a real click on the menu bar icon and a real screen lock still need a manual check (#67).
 - macOS: another app using the same hotkey is not detected; the system lets both register it.
 
 ## Build and test

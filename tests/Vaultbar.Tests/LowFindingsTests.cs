@@ -5,7 +5,7 @@ using Xunit;
 
 namespace Vaultbar.Tests;
 
-/// <summary>VBR-28: the low findings of the 2026-11-14 security review.</summary>
+/// <summary>#64: the low findings of the 2026-11-14 security review.</summary>
 public class LowFindingsTests : IDisposable
 {
     private readonly string _dir = Path.Combine(Path.GetTempPath(), "vaultbar-tests-" + Guid.NewGuid().ToString("N"));

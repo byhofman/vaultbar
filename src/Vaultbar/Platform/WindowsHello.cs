@@ -8,7 +8,7 @@ namespace Vaultbar.Platform;
 [SupportedOSPlatform("windows")]
 internal sealed unsafe class WindowsHello : IQuickUnlockProvider
 {
-    // Before VBR-28 every account shared this key name, so any key under it could stand in for any account's.
+    // Before #64 every account shared this key name, so any key under it could stand in for any account's.
     private const string LegacyKeyName = "vaultbar";
     private const string DialogClass = "Credential Dialog Xaml Host";
 

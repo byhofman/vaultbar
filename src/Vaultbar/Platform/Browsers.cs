@@ -2,7 +2,7 @@ namespace Vaultbar.Platform;
 
 /// <summary>
 /// Known web browsers, by Windows process name, Linux WM_CLASS or macOS bundle identifier. A browser's window title is
-/// written by the page, so a browser never gets suggestions or a silent fill from its title (VBR-22).
+/// written by the page, so a browser never gets suggestions or a silent fill from its title (#60).
 /// </summary>
 public static class Browsers
 {

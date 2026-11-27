@@ -4,7 +4,7 @@
 # the tar.gz so the one-liner gets the signed app too. Without them it signs ad hoc, and a browser download needs
 # Open Anyway once. With APPLE_PROVISIONING_PROFILE (a base64 Developer ID provisioning profile for
 # dev.byhofman.vaultbar with a keychain access group) as well, the app also gets that access group, which moves the
-# Touch ID key into the data-protection keychain (VBR-26).
+# Touch ID key into the data-protection keychain (#68).
 # Usage: package.sh <dist folder> <rid>...
 set -euo pipefail
 dist=${1:A}; shift
