@@ -3,7 +3,7 @@ using Xunit;
 
 namespace Vaultbar.Tests;
 
-/// <summary>VBR-27 (M4): every vault timeout the Bitwarden desktop app stores, and what Vaultbar does with it.</summary>
+/// <summary>#63 (M4): every vault timeout the Bitwarden desktop app stores, and what Vaultbar does with it.</summary>
 public class LockPolicyTests
 {
     [Theory]

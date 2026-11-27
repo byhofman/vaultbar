@@ -5,7 +5,7 @@ using Xunit;
 namespace Vaultbar.Tests;
 
 /// <summary>
-/// VBR-22 against real browsers: a local look-alike page titled as Contoso's sign-in, opened in a throwaway profile, and
+/// #60 against real browsers: a local look-alike page titled as Contoso's sign-in, opened in a throwaway profile, and
 /// the address Vaultbar reads must be the page's own. Runs where CI sets VAULTBAR_BROWSER_TESTS=1 (the Windows and macOS
 /// jobs, whose images have the browsers and are thrown away); never against the user's own browser profile.
 /// </summary>

@@ -9,7 +9,7 @@
 # GITHUB_TOKEN, when set, authenticates the release lookup; anonymous lookups share a 60-an-hour limit per IP address.
 set -euo pipefail
 
-# The Apple Team ID that signs Vaultbar releases: empty until a Developer ID exists (VBR-8). VAULTBAR_EXPECT_TEAM_ID
+# The Apple Team ID that signs Vaultbar releases: empty until a Developer ID exists (#68). VAULTBAR_EXPECT_TEAM_ID
 # only exists so the tests can switch the signed path on against an unsigned build.
 team_id=""
 [[ -n $team_id ]] || team_id=${VAULTBAR_EXPECT_TEAM_ID:-}

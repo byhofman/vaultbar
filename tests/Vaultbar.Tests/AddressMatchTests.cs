@@ -5,7 +5,7 @@ using Xunit;
 
 namespace Vaultbar.Tests;
 
-/// <summary>VBR-22: which logins a browser page gets, by its address and Bitwarden's URI rules, never by its title.</summary>
+/// <summary>#60: which logins a browser page gets, by its address and Bitwarden's URI rules, never by its title.</summary>
 public class AddressMatchTests : IDisposable
 {
     private readonly string _dir = Path.Combine(Path.GetTempPath(), "vaultbar-tests-" + Guid.NewGuid().ToString("N"));

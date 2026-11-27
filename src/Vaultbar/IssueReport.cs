@@ -4,7 +4,7 @@ using Vaultbar.Vault;
 namespace Vaultbar;
 
 /// <summary>
-/// A new issue on GitHub with the version and system filled in (VBR-29). It only opens a page in the browser: Vaultbar
+/// A new issue on GitHub with the version and system filled in (#65). It only opens a page in the browser: Vaultbar
 /// itself sends nothing, and nothing from the vault goes into the address.
 /// </summary>
 public static class IssueReport

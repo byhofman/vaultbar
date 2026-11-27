@@ -19,12 +19,12 @@ public sealed class QuickUnlockStore(string path)
         var root = Read();
         if (root is null || DesktopStore.Str(root["userId"]) != userId) return QuickUnlockSetting.NotSetUp;
         if (root["declined"] is JsonValue v && v.TryGetValue<bool>(out var declined) && declined) return QuickUnlockSetting.Off;
-        // An enrollment from before VBR-25 has no verifier: it counts as not set up, and Tidy removes it.
+        // An enrollment from before #62 has no verifier: it counts as not set up, and Tidy removes it.
         return DesktopStore.Str(root["verifier"]) is not null ? QuickUnlockSetting.On : QuickUnlockSetting.NotSetUp;
     }
 
     /// <summary>
-    /// The only place reading leads to writing: drops an enrollment from before VBR-25 (a key with no age), and a stored
+    /// The only place reading leads to writing: drops an enrollment from before #62 (a key with no age), and a stored
     /// key that persistence no longer allows, is too old, or is dated in the future. Called by explicit actions only (a
     /// probe of data.json, an unlock), so the getters the UI reads stay free of side effects.
     /// </summary>

@@ -68,7 +68,7 @@ public func derive(
 }
 
 // The data-protection keychain, once Vaultbar is signed with a Developer ID and a provisioning profile that grant it a
-// keychain access group (M3, VBR-26). A key there is usable only by apps signed into that group, so another process
+// keychain access group (M3, #68). A key there is usable only by apps signed into that group, so another process
 // running as the same user can no longer load it, as it can a key blob from a file.
 
 /// 1 when this process holds a keychain access group, which only a signed build with its profile does.
