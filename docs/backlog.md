@@ -14,35 +14,35 @@ IDs are permanent: never renumber or reuse one.
 
 ## Security
 
-- [x] VBR-9 Lock when the Linux session locks or the machine suspends
-- [x] VBR-10 Installers check each download against its SHA-256 digest, and releases carry build provenance
-- [x] VBR-11 Auto-type stops the moment another window takes focus
-- [x] VBR-12 Copied secrets never reach other devices or clipboard history, and are cleared on lock even with the timer off
-- [x] VBR-16 A test keeps "the only network traffic is website icons" true
+- [x] VBR-9 Lock when the Linux session locks or the machine suspends — v0.4.0
+- [x] VBR-10 Installers check each download against its SHA-256 digest, and releases carry build provenance — v0.4.0
+- [x] VBR-11 Auto-type stops the moment another window takes focus — v0.4.0
+- [x] VBR-12 Copied secrets never reach other devices or clipboard history, and are cleared on lock even with the timer off — v0.4.0
+- [x] VBR-16 A test keeps "the only network traffic is website icons" true — v0.4.0
 
 ## Switching from 1Password
 
-- [x] VBR-13 Copy keys work as in 1Password Quick Access: Ctrl+C username, Ctrl+Shift+C password, Alt+Enter opens the website
-- [x] VBR-14 A README guide for 1Password users: how to import, and a key map checked against 1Password's own list
+- [x] VBR-13 Copy keys work as in 1Password Quick Access: Ctrl+C username, Ctrl+Shift+C password, Alt+Enter opens the website — v0.4.0
+- [x] VBR-14 A README guide for 1Password users: how to import, and a key map checked against 1Password's own list — v0.4.0
 
 ## Keyboard
 
-- [x] VBR-15 The shortcut list (F1) shows every key, Bitwarden's included
+- [x] VBR-15 The shortcut list (F1) shows every key, Bitwarden's included — v0.4.0
 
 ## Later
 
 - [ ] VBR-5 Biometric unlock on Linux
 - [ ] VBR-6 Accounts without a master password (SSO with trusted devices or key connector)
 - [ ] VBR-17 English and Dutch UI, following the system language
-- [x] VBR-18 Branding pass: Vaultbar's logo colour as a small hint in the interface (owner 2026-11-14: "branding is v1 for every app, as well is feedback")
-- [x] ~~VBR-19 Feedback from inside the app: support, a feature request or a bug report through the platform's feedback client (ACC-147), without an account where the app has none, and never sending the user's files (owner 2026-11-14: "branding is v1 for every app, as well is feedback")~~ cut by the owner 2026-11-15: "Dockyard and Vaultbar dont do in app feedback!!! No free tool does"
-- [x] VBR-20 Research: is the current Bitwarden integration secure? How Vaultbar talks to Bitwarden (CLI, API or SDK), where the session key, unlock state and cached items live in memory and on disk, what Windows Hello and Touch ID actually protect, the clipboard and auto-type exposure, the IPC between the bar and its helper, update signing, and how this compares with Bitwarden's own clients; findings ranked, each with a fix (owner 2026-11-14, v1) Done 2026-11-14: docs/research/security-review/findings.md (no Critical; H1, H2 before v1).
-- [x] VBR-21 Monitoring (owner 2026-11-14, v1): the download page and the release downloads are watched for being up, with an alert; no telemetry from the app itself — gitops#184: page, the latest release's eight assets and the three installers probed every two minutes, `VaultbarDownloadDown` in Grafana
-- [x] VBR-22 H1: match suggestions and auto-type on the browser's address with Bitwarden's URI rules, never on a browser window title alone; confirm with the host shown when the address is unknown or does not match (security review 2026-11-14, docs/research/security-review/findings.md; v1)
-- [x] VBR-23 H2: the installers verify the release signer (Team ID / Authenticode subject) and stop stripping quarantine and re-signing; until signing exists, verify the build attestation when gh is present and say "unsigned build" (with VBR-8 and Windows signing) (security review 2026-11-14, docs/research/security-review/findings.md; v1)
+- [x] VBR-18 Branding pass: Vaultbar's logo colour as a small hint in the interface (owner 2026-11-14: "branding is v1 for every app, as well is feedback") — v0.4.0
+- [x] ~~VBR-19 Feedback from inside the app: support, a feature request or a bug report through the platform's feedback client (ACC-147), without an account where the app has none, and never sending the user's files (owner 2026-11-14: "branding is v1 for every app, as well is feedback")~~ cut by the owner 2026-11-15: "Dockyard and Vaultbar dont do in app feedback!!! No free tool does" — v0.4.0
+- [x] VBR-20 Research: is the current Bitwarden integration secure? How Vaultbar talks to Bitwarden (CLI, API or SDK), where the session key, unlock state and cached items live in memory and on disk, what Windows Hello and Touch ID actually protect, the clipboard and auto-type exposure, the IPC between the bar and its helper, update signing, and how this compares with Bitwarden's own clients; findings ranked, each with a fix (owner 2026-11-14, v1) Done 2026-11-14: docs/research/security-review/findings.md (no Critical; H1, H2 before v1). — v0.4.0
+- [x] VBR-21 Monitoring (owner 2026-11-14, v1): the download page and the release downloads are watched for being up, with an alert; no telemetry from the app itself — gitops#184: page, the latest release's eight assets and the three installers probed every two minutes, `VaultbarDownloadDown` in Grafana — v0.4.0
+- [x] VBR-22 H1: match suggestions and auto-type on the browser's address with Bitwarden's URI rules, never on a browser window title alone; confirm with the host shown when the address is unknown or does not match (security review 2026-11-14, docs/research/security-review/findings.md; v1) — v0.4.0
+- [x] VBR-23 H2: the installers verify the release signer (Team ID / Authenticode subject) and stop stripping quarantine and re-signing; until signing exists, verify the build attestation when gh is present and say "unsigned build" (with VBR-8 and Windows signing) (security review 2026-11-14, docs/research/security-review/findings.md; v1) — v0.4.0
 - [ ] VBR-24 M1: rulesets on main and v* tags and a release environment for the signing credentials (repository settings, owner's call) (security review 2026-11-14, docs/research/security-review/findings.md; v1)
-- [x] VBR-25 M2: quick unlock per process by default; persistence across restarts opt-in with a maximum age; forget it when the account leaves data.json (security review 2026-11-14, docs/research/security-review/findings.md; v1)
+- [x] VBR-25 M2: quick unlock per process by default; persistence across restarts opt-in with a maximum age; forget it when the account leaves data.json (security review 2026-11-14, docs/research/security-review/findings.md; v1) — v0.4.0
 - [ ] VBR-26 M3: the macOS Secure Enclave key in the data-protection keychain under Vaultbar's access group once a Developer ID exists; document the Windows residual (security review 2026-11-14, docs/research/security-review/findings.md; v1) Built 2026-11-15 (D-19): the keychain key switches on with the Developer ID and provisioning profile of VBR-8; Windows residual documented.
-- [x] VBR-27 M4: map every Bitwarden vault-timeout value correctly (0, onIdle, onSleep, onLocked, onRestart, never, legacy negatives) and count idle time while the bar is open, with tests (security review 2026-11-14, docs/research/security-review/findings.md; v1)
-- [x] VBR-28 L1-L7 from the review: pinned and locked key memory; no silent fallback copy; master-password re-prompt by default; per-account Hello key; random pipe suffix; runtime update check; favicon host allow-list (security review 2026-11-14, docs/research/security-review/findings.md; v1)
-- [x] VBR-29 "Report an issue" in the app (tray menu and the CLI's help) opens a new GitHub issue on byhofman/vaultbar, with an issue template that asks for the version, OS and steps (never vault contents), and the app's version and OS filled in; the README says the same (owner 2026-11-15: "for dockyard and vaultbar people should just raise a github issue"; v1)
+- [x] VBR-27 M4: map every Bitwarden vault-timeout value correctly (0, onIdle, onSleep, onLocked, onRestart, never, legacy negatives) and count idle time while the bar is open, with tests (security review 2026-11-14, docs/research/security-review/findings.md; v1) — v0.4.0
+- [x] VBR-28 L1-L7 from the review: pinned and locked key memory; no silent fallback copy; master-password re-prompt by default; per-account Hello key; random pipe suffix; runtime update check; favicon host allow-list (security review 2026-11-14, docs/research/security-review/findings.md; v1) — v0.4.0
+- [x] VBR-29 "Report an issue" in the app (tray menu and the CLI's help) opens a new GitHub issue on byhofman/vaultbar, with an issue template that asks for the version, OS and steps (never vault contents), and the app's version and OS filled in; the README says the same (owner 2026-11-15: "for dockyard and vaultbar people should just raise a github issue"; v1) — v0.4.0
