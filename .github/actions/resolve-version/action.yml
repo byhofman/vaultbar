@@ -1,0 +1,72 @@
+# Copied from byhofman/pipeline-templates (v4): a public repository cannot use actions from a private one.
+name: Resolve version
+description: >-
+  Validate the triggering tag as SemVer 2.0.0 and resolve it to a version string.
+  Strips the leading v, drops build metadata, and reports whether it is a prerelease.
+
+inputs:
+  tag:
+    description: >-
+      Tag to resolve. Empty uses the tag that triggered the run (GITHUB_REF_NAME),
+      and fails if the run was not triggered by a tag push.
+    required: false
+    default: ''
+  tag-prefix:
+    description: >-
+      Namespace before the version in the tag, for a repository releasing several apps
+      separately: 'pdfer/' resolves 'pdfer/v1.2.3' to 1.2.3. A tag without this prefix fails.
+      Empty expects a plain vX.Y.Z tag.
+    required: false
+    default: ''
+
+outputs:
+  version:
+    description: Resolved semver — tag without the leading v, build metadata stripped.
+    value: ${{ steps.semver.outputs.version }}
+  is-prerelease:
+    description: 'true when the resolved version carries a prerelease identifier.'
+    value: ${{ steps.semver.outputs.is-prerelease }}
+
+runs:
+  using: composite
+  steps:
+    - name: Parse semver
+      id: semver
+      shell: bash
+      env:
+        INPUT_TAG: ${{ inputs.tag }}
+        INPUT_TAG_PREFIX: ${{ inputs.tag-prefix }}
+      run: |
+        set -euo pipefail
+
+        tag="${INPUT_TAG}"
+        if [[ -z "${tag}" ]]; then
+          case "${GITHUB_REF}" in
+            refs/tags/*) : ;;
+            *) echo "::error::Not triggered by a tag push (got ${GITHUB_REF}), and no 'tag' input was given."; exit 1 ;;
+          esac
+          tag="${GITHUB_REF_NAME}"
+        fi
+
+        prefix="${INPUT_TAG_PREFIX}"
+        if [[ -n "${prefix}" ]]; then
+          if [[ "${tag}" != "${prefix}"* ]]; then
+            echo "::error::Tag '${tag}' does not start with the tag-prefix '${prefix}'. This workflow releases only tags like ${prefix}v1.2.3; check its 'on: push: tags' filter."
+            exit 1
+          fi
+          tag="${tag#"${prefix}"}"
+        fi
+
+        raw="${tag#v}"
+        semver='^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(-((0|[1-9][0-9]*|[0-9]*[a-zA-Z-][0-9a-zA-Z-]*))(\.(0|[1-9][0-9]*|[0-9]*[a-zA-Z-][0-9a-zA-Z-]*))*)?(\+([0-9a-zA-Z-]+(\.[0-9a-zA-Z-]+)*))?$'
+        if [[ ! "${raw}" =~ ${semver} ]]; then
+          echo "::error::Tag '${tag}' is not a valid SemVer 2.0.0 version. Expected vMAJOR.MINOR.PATCH[-prerelease][+build] (e.g. v1.2.3 or v1.2.3-beta.1)."
+          exit 1
+        fi
+
+        version="${raw%%+*}"
+        if [[ "${version}" == *-* ]]; then prerelease=true; else prerelease=false; fi
+
+        echo "version=${version}" >> "$GITHUB_OUTPUT"
+        echo "is-prerelease=${prerelease}" >> "$GITHUB_OUTPUT"
+        echo "Validated ${tag} -> ${version} (prerelease=${prerelease})"
