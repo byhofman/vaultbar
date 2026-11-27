@@ -106,7 +106,7 @@ public sealed class VaultService : IDisposable
             if (ex is StoreException { Error: VaultError.NoAccount }) ForgetQuickUnlockOfGoneAccounts(DesktopStore.AccountIds(StorePath));
             State = VaultState.Error;
             Error = ErrorOf(ex);
-            Log.Write($"probe: {Log.Shape(ex)}");
+            Log.Write($"probe: {Log.Shape(ex)} at {DesktopStore.Describe(StorePath)} on {Environment.OSVersion}");
         }
     }
 
@@ -124,7 +124,7 @@ public sealed class VaultService : IDisposable
         }
         catch (Exception ex)
         {
-            Log.Write($"unlock: {Log.Shape(ex)}");
+            Log.Write($"unlock: {Log.Shape(ex)} at {DesktopStore.Describe(StorePath)} on {Environment.OSVersion}");
             return ErrorOf(ex);
         }
     }
@@ -208,6 +208,7 @@ public sealed class VaultService : IDisposable
     {
         StoreException store => store.Error,
         NotSupportedException => VaultError.KeyFormatUnsupported,
+        UnauthorizedAccessException => VaultError.AccessDenied,
         _ => VaultError.Unreadable,
     };
 

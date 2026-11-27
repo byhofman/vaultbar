@@ -16,6 +16,9 @@ internal static class VaultErrorText
         VaultError.KeyFormatUnsupported => "This account uses a key format Vaultbar does not support yet.",
         VaultError.WrongPassword => "Invalid master password.",
         VaultError.QuickUnlockMismatch => $"{quickUnlockName} no longer matches this vault. Enter your master password to set it up again.",
+        VaultError.AccessDenied => OperatingSystem.IsMacOS()
+            ? "macOS did not let Vaultbar read the Bitwarden data. Allow Vaultbar under System Settings > Privacy & Security (Full Disk Access, or Files & Folders), then restart it. After an update the permission may need to be granted again."
+            : "The operating system did not let Vaultbar read the Bitwarden data. Check that your user can read the Bitwarden data folder.",
         _ => "Could not read the Bitwarden data. The details are in vaultbar.log.",
     };
 }
